@@ -1,4 +1,4 @@
-﻿import { supabaseAdmin, createUserSupabaseClient } from '../config/supabase.js';
+import { supabaseAdmin, createUserSupabaseClient } from '../config/supabase.js';
 import { AppError, asyncHandler } from './error.middleware.js';
 
 export const authenticate = asyncHandler(async (req, _res, next) => {
