@@ -1,4 +1,4 @@
-﻿import express from 'express';
+import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
@@ -25,24 +25,28 @@ app.use(
 app.use(express.json({ limit: '10mb' }));
 app.use(morgan('dev'));
 
-// Public liveness check
-app.get('/health', (_req, res) => {
+// Public liveness check (supports direct /health and Vercel /api/health or /api/v1/health rewrites)
+const healthHandler = (_req, res) => {
   res.json({
     success: true,
     service: 'victorio-abc-backend',
     timestamp: new Date().toISOString(),
   });
-});
+};
+app.get(['/health', '/api/health', '/api/v1/health', '/v1/health'], healthHandler);
 
-// Multi-tenant versioned API routes
-app.use('/api/v1/patients', patientsRoutes);
-app.use('/api/v1/triage', triageRoutes);
-app.use('/api/v1/clinical-orders', clinicalOrdersRoutes);
-app.use('/api/v1/schedules', schedulesRoutes);
-app.use('/api/v1/inventory', inventoryRoutes);
-app.use('/api/v1/analytics', analyticsRoutes);
-app.use('/api/v1/branches', branchesRoutes);
-app.use('/api/v1/audit', auditRoutes);
+// Multi-tenant versioned API routes (mounted on both /api/v1 and /v1 for Vercel rewrite resilience)
+const v1Router = express.Router();
+v1Router.use('/patients', patientsRoutes);
+v1Router.use('/triage', triageRoutes);
+v1Router.use('/clinical-orders', clinicalOrdersRoutes);
+v1Router.use('/schedules', schedulesRoutes);
+v1Router.use('/inventory', inventoryRoutes);
+v1Router.use('/analytics', analyticsRoutes);
+v1Router.use('/branches', branchesRoutes);
+v1Router.use('/audit', auditRoutes);
+
+app.use(['/api/v1', '/v1'], v1Router);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

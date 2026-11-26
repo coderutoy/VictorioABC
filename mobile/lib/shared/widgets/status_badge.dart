@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:victorio_abc_mobile/core/theme/app_colors.dart';
 
 enum BadgeTone { teal, emerald, amber, red, blue, slate }
@@ -16,12 +16,12 @@ class StatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (bg, fg) = switch (tone) {
-      BadgeTone.teal => (AppColors.primaryLight, AppColors.primaryDark),
+      BadgeTone.teal => (AppColors.mint.withValues(alpha: 0.35), AppColors.navy),
       BadgeTone.emerald => (AppColors.successBg, AppColors.success),
       BadgeTone.amber => (AppColors.warningBg, AppColors.warning),
       BadgeTone.red => (AppColors.dangerBg, AppColors.danger),
-      BadgeTone.blue => (AppColors.infoBg, AppColors.info),
-      BadgeTone.slate => (const Color(0xFFF1F5F9), AppColors.textSecondary),
+      BadgeTone.blue => (AppColors.primaryLight, AppColors.primaryDark),
+      BadgeTone.slate => (const Color(0xFFE6E6DF), AppColors.textSecondary),
     };
 
     return Container(
@@ -32,9 +32,11 @@ class StatusBadge extends StatelessWidget {
       ),
       child: Text(
         label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
         style: TextStyle(
           fontSize: 11,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w700,
           color: fg,
         ),
       ),

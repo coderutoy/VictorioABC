@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:victorio_abc_mobile/core/theme/app_colors.dart';
 import 'package:victorio_abc_mobile/core/theme/app_typography.dart';
 
@@ -10,6 +10,7 @@ class AppTheme {
       seedColor: AppColors.primary,
       primary: AppColors.primary,
       onPrimary: Colors.white,
+      secondary: AppColors.mint,
       surface: AppColors.surface,
       error: AppColors.danger,
       brightness: Brightness.light,
@@ -21,10 +22,10 @@ class AppTheme {
       scaffoldBackgroundColor: AppColors.background,
       textTheme: AppTypography.textTheme,
       appBarTheme: const AppBarTheme(
-        backgroundColor: AppColors.surface,
-        foregroundColor: AppColors.textPrimary,
+        backgroundColor: AppColors.navy,
+        foregroundColor: Colors.white,
         elevation: 0,
-        scrolledUnderElevation: 0.5,
+        scrolledUnderElevation: 1,
         surfaceTintColor: Colors.transparent,
       ),
       cardTheme: CardThemeData(
@@ -39,7 +40,7 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: AppColors.surface,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
           borderSide: const BorderSide(color: AppColors.border),
@@ -50,18 +51,18 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: AppColors.primary, width: 1.6),
+          borderSide: const BorderSide(color: AppColors.primary, width: 1.8),
         ),
       ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: AppColors.surface,
-        indicatorColor: AppColors.primaryLight,
+        indicatorColor: AppColors.mint.withValues(alpha: 0.35),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           final isSelected = states.contains(WidgetState.selected);
           return TextStyle(
             fontSize: 11,
-            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-            color: isSelected ? AppColors.primaryDark : AppColors.textMuted,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+            color: isSelected ? AppColors.navy : AppColors.textMuted,
           );
         }),
       ),

@@ -1,10 +1,11 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:victorio_abc_mobile/core/config/supabase_config.dart';
 import 'package:victorio_abc_mobile/features/ai_triage/screens/ai_triage_screen.dart';
 import 'package:victorio_abc_mobile/features/auth/screens/login_screen.dart';
 import 'package:victorio_abc_mobile/features/auth/screens/register_screen.dart';
+import 'package:victorio_abc_mobile/features/auth/screens/splash_screen.dart';
 import 'package:victorio_abc_mobile/features/education/screens/education_screen.dart';
 import 'package:victorio_abc_mobile/features/home/screens/home_screen.dart';
 import 'package:victorio_abc_mobile/features/qr_pass/screens/qr_pass_screen.dart';
@@ -16,13 +17,14 @@ class AppRouter {
   AppRouter._();
 
   static final GoRouter router = GoRouter(
-    initialLocation: SupabaseConfig.isConfigured ? '/login' : '/home',
+    initialLocation: '/splash',
     redirect: (context, state) {
+      final loc = state.matchedLocation;
+      if (loc == '/splash') return null;
       if (!SupabaseConfig.isConfigured) return null;
 
       final session = Supabase.instance.client.auth.currentSession;
-      final isAuthRoute =
-          state.matchedLocation == '/login' || state.matchedLocation == '/register';
+      final isAuthRoute = loc == '/login' || loc == '/register';
 
       if (session == null && !isAuthRoute) {
         return '/login';
@@ -33,6 +35,10 @@ class AppRouter {
       return null;
     },
     routes: [
+      GoRoute(
+        path: '/splash',
+        builder: (context, state) => const SplashScreen(),
+      ),
       GoRoute(
         path: '/login',
         builder: (context, state) => const LoginScreen(),

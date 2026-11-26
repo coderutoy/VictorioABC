@@ -1,7 +1,8 @@
-﻿import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { ROLES, STAFF_ROLES } from './context/AuthContext';
 import { AppShell } from './components/layout/AppShell';
 import { RoleRoute } from './components/routing/RoleRoute';
+import { PublicLandingPage } from './pages/PublicLandingPage';
 import { LoginPage } from './pages/LoginPage';
 import { UnauthorizedPage } from './pages/UnauthorizedPage';
 import { DashboardPage } from './pages/DashboardPage';
@@ -17,12 +18,15 @@ import { AuditLogsPage } from './pages/AuditLogsPage';
 export default function App() {
   return (
     <Routes>
+      {/* Public-Facing Mobile-Responsive Website */}
+      <Route path="/" element={<PublicLandingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/unauthorized" element={<UnauthorizedPage />} />
 
+      {/* Authenticated Clinical Portal */}
       <Route element={<RoleRoute allowedRoles={STAFF_ROLES} />}>
         <Route element={<AppShell />}>
-          <Route index element={<DashboardPage />} />
+          <Route path="dashboard" element={<DashboardPage />} />
           <Route path="patients" element={<PatientsPage />} />
           <Route path="triage" element={<TriagePage />} />
           <Route path="clinical-orders" element={<ClinicalOrdersPage />} />

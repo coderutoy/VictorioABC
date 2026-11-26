@@ -1,8 +1,8 @@
-﻿import { Router } from 'express';
+import { Router } from 'express';
 import { authenticate } from '../../middleware/auth.middleware.js';
 import { requireRole, ROLES } from '../../middleware/rbac.middleware.js';
 import { enforceTenantScope } from '../../middleware/tenant.middleware.js';
-import { getInventoryHealth } from './inventory.controller.js';
+import { getInventoryHealth, listInventory } from './inventory.controller.js';
 
 const router = Router();
 
@@ -11,5 +11,6 @@ router.use(requireRole(ROLES.NURSE, ROLES.DOCTOR, ROLES.ADMIN));
 router.use(enforceTenantScope({ allowPatientSelf: false }));
 
 router.get('/health', getInventoryHealth);
+router.get('/', listInventory);
 
 export default router;

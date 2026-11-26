@@ -7,7 +7,11 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Victorio Abc Mobile</string>
+	<string>Victorio ABC</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Victorio ABC uses the camera to scan patient QR check-in passes and capture wound photos for clinical assessment.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Victorio ABC accesses your photo library so you can upload wound photos for clinical assessment.</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>

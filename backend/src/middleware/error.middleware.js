@@ -1,4 +1,4 @@
-﻿export class AppError extends Error {
+export class AppError extends Error {
   constructor(message, statusCode = 500, details = null) {
     super(message);
     this.statusCode = statusCode;
@@ -18,10 +18,12 @@ export function notFoundHandler(req, res, next) {
 export function errorHandler(err, req, res, _next) {
   // Zod schema validation error
   if (err?.name === 'ZodError') {
+    const issues = err.issues || err.errors || [];
+    const firstMsg = issues[0]?.message ? `: ${issues[0].message}` : '';
     return res.status(400).json({
       success: false,
-      message: 'Validation failed',
-      errors: err.errors,
+      message: `Validation failed${firstMsg}`,
+      errors: issues,
     });
   }
 

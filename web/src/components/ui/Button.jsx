@@ -1,4 +1,4 @@
-﻿export function Button({
+export function Button({
   children,
   variant = 'primary',
   size = 'md',
@@ -7,22 +7,23 @@
   ...props
 }) {
   const variants = {
-    primary: 'bg-brand-600 text-white hover:bg-brand-700 focus:ring-brand-500',
-    secondary: 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 focus:ring-slate-400',
+    primary: 'bg-[#118AB2] text-white hover:bg-[#0D6E8E] focus:ring-[#118AB2]',
+    secondary:
+      'bg-white text-[#464B71] border border-[#DDDCD4] hover:bg-[#F2F2ED] focus:ring-[#464B71]',
     danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500',
-    ghost: 'bg-transparent text-slate-600 hover:bg-slate-100 focus:ring-slate-400',
+    ghost: 'bg-transparent text-[#464B71] hover:bg-[#F2F2ED] focus:ring-[#464B71]',
   };
 
   const sizes = {
-    sm: 'px-3 py-1.5 text-xs',
-    md: 'px-4 py-2 text-sm',
-    lg: 'px-5 py-2.5 text-base',
+    sm: 'min-h-[38px] px-3 py-1.5 text-xs',
+    md: 'min-h-[44px] px-4 py-2 text-sm',
+    lg: 'min-h-[48px] px-5 py-2.5 text-base',
   };
 
   return (
     <button
       type={type}
-      className={`inline-flex items-center justify-center gap-2 rounded-lg font-medium transition focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 ${variants[variant]} ${sizes[size]} ${className}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 ${variants[variant]} ${sizes[size]} ${className}`}
       {...props}
     >
       {children}
