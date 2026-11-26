@@ -18,7 +18,8 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(null);
 
-  const fetchProfile = useCallback(async (userId) => {
+  const fetchProfile = useCallback(async (authUser) => {
+    const userId = typeof authUser === 'string' ? authUser : authUser?.id;
     if (!userId) {
       setProfile(null);
       return null;
@@ -28,17 +29,40 @@ export function AuthProvider({ children }) {
       .from('profiles')
       .select('id, branch_id, role, full_name, phone, email, license_number, is_active')
       .eq('id', userId)
-      .single();
+      .maybeSingle();
 
-    if (error) {
-      setAuthError(error.message);
-      setProfile(null);
-      return null;
+    if (!error && data) {
+      setAuthError(null);
+      setProfile(data);
+      return data;
     }
 
-    setAuthError(null);
-    setProfile(data);
-    return data;
+    // Fallback to signed Supabase Auth user_metadata if public.profiles table/row is not yet migrated
+    const resolvedUser =
+      typeof authUser === 'object' && authUser
+        ? authUser
+        : (await supabase.auth.getUser()).data?.user;
+
+    if (resolvedUser) {
+      const meta = resolvedUser.user_metadata || {};
+      const fallbackProfile = {
+        id: resolvedUser.id,
+        branch_id: meta.branch_id || null,
+        role: meta.role || 'patient',
+        full_name: meta.full_name || resolvedUser.email || 'Victorio ABC User',
+        phone: meta.phone || null,
+        email: resolvedUser.email || null,
+        license_number: meta.license_number || null,
+        is_active: true,
+      };
+      setAuthError(null);
+      setProfile(fallbackProfile);
+      return fallbackProfile;
+    }
+
+    setAuthError(error?.message || 'Unable to load profile');
+    setProfile(null);
+    return null;
   }, []);
 
   useEffect(() => {

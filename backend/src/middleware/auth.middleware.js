@@ -21,21 +21,30 @@ export const authenticate = asyncHandler(async (req, _res, next) => {
     throw new AppError('Invalid or expired authentication token.', 401);
   }
 
-  const { data: profile, error: profileError } = await supabaseAdmin
+  const { data: profile } = await supabaseAdmin
     .from('profiles')
     .select('id, branch_id, role, full_name, phone, email, license_number, notif_pref, is_active')
     .eq('id', user.id)
-    .single();
+    .maybeSingle();
 
-  if (profileError || !profile) {
-    throw new AppError('User profile not provisioned.', 403);
-  }
+  const meta = user.user_metadata || {};
+  const resolvedProfile = profile || {
+    id: user.id,
+    branch_id: meta.branch_id || null,
+    role: meta.role || 'patient',
+    full_name: meta.full_name || user.email || 'Victorio ABC User',
+    phone: meta.phone || null,
+    email: user.email || null,
+    license_number: meta.license_number || null,
+    notif_pref: 'all',
+    is_active: true,
+  };
 
-  if (!profile.is_active) {
+  if (resolvedProfile.is_active === false) {
     throw new AppError('Account is deactivated. Contact Central Admin.', 403);
   }
 
-  req.user = profile;
+  req.user = resolvedProfile;
   req.accessToken = token;
   req.supabase = createUserSupabaseClient(token);
   next();

@@ -14,6 +14,7 @@
     "backend": {
       "root": "backend",
       "framework": "express",
+      "entrypoint": "src/app.js",
       "bindings": [
         {
           "type": "service",
@@ -25,7 +26,8 @@
     },
     "ai-service": {
       "root": "ai-service",
-      "framework": "fastapi"
+      "framework": "fastapi",
+      "entrypoint": "app/main.py"
     }
   },
   "rewrites": [
