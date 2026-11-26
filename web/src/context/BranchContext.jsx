@@ -26,8 +26,8 @@ export function BranchProvider({ children }) {
       try {
         let query = supabase
           .from('branches')
-          .select('id, code, name, address, contact_number, is_active')
-          .eq('is_active', true)
+          .select('id, name, address, barangay, municipality, contact_number, status')
+          .eq('status', 'active')
           .order('name', { ascending: true });
 
         if (!isGlobalAdmin && profile?.branch_id) {
@@ -42,7 +42,6 @@ export function BranchProvider({ children }) {
           if (!isGlobalAdmin && profile?.branch_id) {
             setSelectedBranchId(profile.branch_id);
           } else if (isGlobalAdmin) {
-            // Empty string represents "All Branches (HQ)" for Central Admin
             setSelectedBranchId((prev) => prev || '');
           }
         }

@@ -8,7 +8,7 @@ export function DashboardPage() {
   const { activeBranch, canSwitchBranch } = useBranch();
 
   const scopeLabel = activeBranch
-    ? `${activeBranch.name} (${activeBranch.code})`
+    ? `${activeBranch.name} (Brgy. ${activeBranch.barangay})`
     : canSwitchBranch
       ? 'All Branches (HQ View)'
       : 'Assigned Branch';

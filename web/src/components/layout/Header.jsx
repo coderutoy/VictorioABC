@@ -38,13 +38,13 @@ export function Header({ onOpenSidebar }) {
               <option value="">All Branches (HQ View)</option>
               {branches.map((branch) => (
                 <option key={branch.id} value={branch.id}>
-                  {branch.name} ({branch.code})
+                  {branch.name} (Brgy. {branch.barangay})
                 </option>
               ))}
             </select>
           ) : (
             <span className="text-sm font-medium text-slate-700">
-              {activeBranch ? `${activeBranch.name} (${activeBranch.code})` : 'Assigned Branch'}
+              {activeBranch ? `${activeBranch.name} (Brgy. ${activeBranch.barangay})` : 'Assigned Branch'}
             </span>
           )}
         </div>
