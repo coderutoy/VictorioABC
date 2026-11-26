@@ -1,0 +1,43 @@
+﻿import { Routes, Route, Navigate } from 'react-router-dom';
+import { ROLES, STAFF_ROLES } from './context/AuthContext';
+import { AppShell } from './components/layout/AppShell';
+import { RoleRoute } from './components/routing/RoleRoute';
+import { LoginPage } from './pages/LoginPage';
+import { UnauthorizedPage } from './pages/UnauthorizedPage';
+import { DashboardPage } from './pages/DashboardPage';
+import { PatientsPage } from './pages/PatientsPage';
+import { TriagePage } from './pages/TriagePage';
+import { ClinicalOrdersPage } from './pages/ClinicalOrdersPage';
+import { SchedulesPage } from './pages/SchedulesPage';
+import { InventoryPage } from './pages/InventoryPage';
+import { AnalyticsPage } from './pages/AnalyticsPage';
+import { BranchesPage } from './pages/BranchesPage';
+import { AuditLogsPage } from './pages/AuditLogsPage';
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/unauthorized" element={<UnauthorizedPage />} />
+
+      <Route element={<RoleRoute allowedRoles={STAFF_ROLES} />}>
+        <Route element={<AppShell />}>
+          <Route index element={<DashboardPage />} />
+          <Route path="patients" element={<PatientsPage />} />
+          <Route path="triage" element={<TriagePage />} />
+          <Route path="clinical-orders" element={<ClinicalOrdersPage />} />
+          <Route path="schedules" element={<SchedulesPage />} />
+          <Route path="inventory" element={<InventoryPage />} />
+          <Route path="audit" element={<AuditLogsPage />} />
+
+          <Route element={<RoleRoute allowedRoles={[ROLES.ADMIN]} />}>
+            <Route path="analytics" element={<AnalyticsPage />} />
+            <Route path="branches" element={<BranchesPage />} />
+          </Route>
+        </Route>
+      </Route>
+
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
