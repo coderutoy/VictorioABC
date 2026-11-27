@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { useAuth, ROLES } from './AuthContext';
+import { useAuth, ROLES, BRANCH_SWITCH_SIGNOUT_MESSAGE } from './AuthContext';
 import {
   OFFICIAL_BRANCHES,
   DEFAULT_BRANCH_SLUG,
@@ -58,7 +58,7 @@ export function BranchProvider({ children }) {
       if (!isAuthenticated || !profile) return;
       const isBranchBoundStaff = role === ROLES.DOCTOR || role === ROLES.NURSE;
       if (isBranchBoundStaff && profile.branch_id && profile.branch_id !== nextBranchSlug) {
-        await signOut();
+        await signOut(BRANCH_SWITCH_SIGNOUT_MESSAGE);
         navigate('/login', { replace: true });
       }
     },
@@ -97,7 +97,7 @@ export function BranchProvider({ children }) {
     if (!isAuthenticated || !profile) return;
     const isBranchBoundStaff = role === ROLES.DOCTOR || role === ROLES.NURSE;
     if (isBranchBoundStaff && profile.branch_id && profile.branch_id !== selectedBranchSlug) {
-      signOut().then(() => {
+      signOut(BRANCH_SWITCH_SIGNOUT_MESSAGE).then(() => {
         navigate('/login', { replace: true });
       });
     }

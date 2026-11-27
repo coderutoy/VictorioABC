@@ -1,6 +1,5 @@
-import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { api } from '../lib/api';
 import {
   BRANCH_STORAGE_KEY,
   DEFAULT_BRANCH_SLUG,
@@ -31,33 +30,14 @@ export function getRoleHome(role) {
 export const CROSS_BRANCH_DENIED_MESSAGE =
   'This account is not assigned to this branch. Please switch to your assigned branch and try again.';
 
+export const BRANCH_SWITCH_SIGNOUT_MESSAGE =
+  'Signed out because you switched to a different branch.';
+
 function normalizeBranchSlug(val) {
   if (!val) return null;
   const cleaned = String(val).trim();
   if (!cleaned) return null;
   return getBranchBySlug(cleaned).slug;
-}
-
-/**
- * Passive database `branch_id` validation:
- * - `admin` & `patient`: unrestricted across all branches (`branch_id` may be NULL).
- * - `doctor` & `nurse` : strictly tied to their assigned `profile.branch_id`.
- */
-export function verifyClientSideBranchMatch(profile, activeBranch) {
-  if (!profile || !activeBranch) return;
-  const role = String(profile.role || 'patient').toLowerCase();
-
-  if (role === ROLES.ADMIN || role === ROLES.PATIENT) {
-    return;
-  }
-
-  if (role === ROLES.DOCTOR || role === ROLES.NURSE) {
-    const assignedSlug = normalizeBranchSlug(profile.branch_id);
-    const activeSlug = normalizeBranchSlug(activeBranch.slug || activeBranch.id);
-    if (!assignedSlug || !activeSlug || assignedSlug !== activeSlug) {
-      throw new Error(CROSS_BRANCH_DENIED_MESSAGE);
-    }
-  }
 }
 
 const AuthContext = createContext(null);
@@ -68,12 +48,12 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(null);
 
-  const fetchProfile = useCallback(async (authUser) => {
+  // Prevents onAuthStateChange from prematurely authenticating or wiping authError during atomic signIn validation
+  const validatingRef = useRef(false);
+
+  const queryUserProfile = useCallback(async (authUser) => {
     const userId = typeof authUser === 'string' ? authUser : authUser?.id;
-    if (!userId) {
-      setProfile(null);
-      return null;
-    }
+    if (!userId) return null;
 
     const { data, error } = await supabase
       .from('profiles')
@@ -90,7 +70,7 @@ export function AuthProvider({ children }) {
     if (!error && data) {
       const role = String(data.role || meta.role || 'patient').toLowerCase();
       const rawBranch = data.branch_id !== undefined ? data.branch_id : meta.branch_id;
-      const normalizedProfile = {
+      return {
         ...data,
         role,
         branch_id:
@@ -98,14 +78,11 @@ export function AuthProvider({ children }) {
             ? normalizeBranchSlug(rawBranch) || null
             : normalizeBranchSlug(rawBranch),
       };
-      setAuthError(null);
-      setProfile(normalizedProfile);
-      return normalizedProfile;
     }
 
-    if (resolvedUser) {
-      const role = String(meta.role || 'patient').toLowerCase();
-      const fallbackProfile = {
+    if (resolvedUser && meta.role) {
+      const role = String(meta.role).toLowerCase();
+      return {
         id: resolvedUser.id,
         email: resolvedUser.email || null,
         full_name: meta.full_name || resolvedUser.email || 'Victorio ABC User',
@@ -117,13 +94,8 @@ export function AuthProvider({ children }) {
         license_number: meta.license_number || null,
         is_active: meta.is_active !== false,
       };
-      setAuthError(null);
-      setProfile(fallbackProfile);
-      return fallbackProfile;
     }
 
-    setAuthError(error?.message || 'Unable to load profile');
-    setProfile(null);
     return null;
   }, []);
 
@@ -144,7 +116,7 @@ export function AuthProvider({ children }) {
         if (!isMounted) return;
 
         if (initialSession?.user?.id) {
-          const loadedProfile = await fetchProfile(initialSession.user);
+          const loadedProfile = await queryUserProfile(initialSession.user);
           const currentBranchSlug =
             typeof window !== 'undefined'
               ? getBranchBySlug(
@@ -157,7 +129,12 @@ export function AuthProvider({ children }) {
               loadedProfile?.role === ROLES.NURSE) &&
             loadedProfile?.branch_id !== currentBranchSlug;
 
-          if (loadedProfile?.role === ROLES.PATIENT || isStaffMismatch) {
+          if (
+            !loadedProfile ||
+            loadedProfile.is_active === false ||
+            loadedProfile.role === ROLES.PATIENT ||
+            isStaffMismatch
+          ) {
             await supabase.auth.signOut();
             if (isMounted) {
               setSession(null);
@@ -165,9 +142,11 @@ export function AuthProvider({ children }) {
             }
           } else if (isMounted) {
             setSession(initialSession);
+            setProfile(loadedProfile);
           }
         } else {
           setSession(null);
+          setProfile(null);
         }
       } finally {
         if (isMounted) setLoading(false);
@@ -180,112 +159,158 @@ export function AuthProvider({ children }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
-      if (nextSession?.user?.id) {
-        const loadedProfile = await fetchProfile(nextSession.user);
-        if (loadedProfile?.role === ROLES.PATIENT) {
-          return;
-        }
-        setSession(nextSession);
-      } else {
+    } = supabase.auth.onAuthStateChange(async (event, nextSession) => {
+      // Do NOT interfere while signIn() is performing atomic branch verification
+      if (validatingRef.current) {
+        return;
+      }
+
+      if (event === 'SIGNED_OUT' || !nextSession?.user?.id) {
         setSession(null);
         setProfile(null);
+        // Never wipe authError on SIGNED_OUT so wrong-branch or branch-switch messages stay visible
+        return;
       }
+
+      const loadedProfile = await queryUserProfile(nextSession.user);
+      if (!loadedProfile || loadedProfile.role === ROLES.PATIENT) {
+        return;
+      }
+
+      const currentBranchSlug =
+        typeof window !== 'undefined'
+          ? getBranchBySlug(
+              window.localStorage.getItem(BRANCH_STORAGE_KEY) || DEFAULT_BRANCH_SLUG
+            ).slug
+          : DEFAULT_BRANCH_SLUG;
+
+      if (
+        (loadedProfile.role === ROLES.DOCTOR || loadedProfile.role === ROLES.NURSE) &&
+        loadedProfile.branch_id !== currentBranchSlug
+      ) {
+        return;
+      }
+
+      setSession(nextSession);
+      setProfile(loadedProfile);
     });
 
     return () => {
       isMounted = false;
       subscription.unsubscribe();
     };
-  }, [fetchProfile]);
+  }, [queryUserProfile]);
 
-  const signIn = async (email, password, activeBranchArg) => {
-    setAuthError(null);
-
-    const activeBranch =
-      activeBranchArg ||
-      getBranchBySlug(
-        typeof window !== 'undefined'
-          ? window.localStorage.getItem(BRANCH_STORAGE_KEY) || DEFAULT_BRANCH_SLUG
-          : DEFAULT_BRANCH_SLUG
-      );
-
-    // 1. Authenticate credentials via Supabase Auth (signInWithPassword)
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: String(email || '').trim(),
-      password,
-    });
-
-    if (error || !data?.user) {
-      const msg = error?.message || 'Invalid email or password. Please check your credentials.';
-      setAuthError(msg);
-      throw new Error(msg);
-    }
-
-    // 2. Query profiles for the authenticated user's id to get role and branch_id
-    const loadedProfile = await fetchProfile(data.user);
-    const resolvedRole = String(loadedProfile?.role || 'patient').toLowerCase();
-
-    // 3. If role === 'doctor' || role === 'nurse', passively compare profile.branch_id against activeBranch.id
-    if (resolvedRole === ROLES.DOCTOR || resolvedRole === ROLES.NURSE) {
-      try {
-        verifyClientSideBranchMatch(loadedProfile, activeBranch);
-      } catch (branchErr) {
-        await supabase.auth.signOut();
-        setSession(null);
-        setProfile(null);
-        setAuthError(CROSS_BRANCH_DENIED_MESSAGE);
-        const errObj = new Error(CROSS_BRANCH_DENIED_MESSAGE);
-        errObj.status = 403;
-        throw errObj;
-      }
+  /**
+   * Atomic sign-in with passive database `branch_id` validation:
+   * - Sets validatingRef.current = true so onAuthStateChange never races or clears authError.
+   * - Returns `{ ok: true, role, profile }` on success, or `{ ok: false, error }` on failure
+   *   while also persisting `authError` in context.
+   */
+  const signIn = useCallback(
+    async (email, password, activeBranchArg) => {
+      validatingRef.current = true;
+      setAuthError(null);
 
       try {
-        await api.post('/auth/verify-branch', {
-          branch_id: activeBranch.id,
-          branch_slug: activeBranch.slug,
+        const activeBranchObj =
+          typeof activeBranchArg === 'string'
+            ? getBranchBySlug(activeBranchArg)
+            : activeBranchArg ||
+              getBranchBySlug(
+                typeof window !== 'undefined'
+                  ? window.localStorage.getItem(BRANCH_STORAGE_KEY) || DEFAULT_BRANCH_SLUG
+                  : DEFAULT_BRANCH_SLUG
+              );
+        const activeBranchId = activeBranchObj.slug || activeBranchObj.id;
+
+        // 1. Authenticate credentials via Supabase Auth
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: String(email || '').trim(),
+          password,
         });
-      } catch (apiErr) {
-        if (apiErr?.response?.status === 403) {
+
+        if (error || !data?.user) {
+          const msg = 'Invalid email or password.';
+          setAuthError(msg);
+          return { ok: false, error: msg };
+        }
+
+        // 2. Query public.profiles for user.id
+        const loadedProfile = await queryUserProfile(data.user);
+        if (!loadedProfile || loadedProfile.is_active === false) {
+          await supabase.auth.signOut();
+          setSession(null);
+          setProfile(null);
+          const msg = 'Account profile is inactive or not configured.';
+          setAuthError(msg);
+          return { ok: false, error: msg };
+        }
+
+        const resolvedRole = String(loadedProfile.role || 'patient').toLowerCase();
+
+        // 3. Strict branch check for doctor and nurse before setting authenticated state
+        if (
+          (resolvedRole === ROLES.DOCTOR || resolvedRole === ROLES.NURSE) &&
+          loadedProfile.branch_id !== activeBranchId
+        ) {
           await supabase.auth.signOut();
           setSession(null);
           setProfile(null);
           setAuthError(CROSS_BRANCH_DENIED_MESSAGE);
-          const errObj = new Error(CROSS_BRANCH_DENIED_MESSAGE);
-          errObj.status = 403;
-          throw errObj;
+          return {
+            ok: false,
+            error: CROSS_BRANCH_DENIED_MESSAGE,
+          };
         }
-      }
-    }
 
-    // 4. If role === 'patient': skip branch restriction and navigate to /mobile-app-only
-    if (resolvedRole === ROLES.PATIENT) {
+        // 4. Patient role: sign out web session and route to /mobile-app-only
+        if (resolvedRole === ROLES.PATIENT) {
+          await supabase.auth.signOut();
+          setSession(null);
+          setProfile(null);
+          return {
+            ok: true,
+            role: ROLES.PATIENT,
+            profile: loadedProfile,
+            requireMobileApp: true,
+          };
+        }
+
+        // 5. Validation passed for admin, doctor, or nurse
+        setSession(data.session);
+        setProfile(loadedProfile);
+        return {
+          ok: true,
+          role: resolvedRole,
+          profile: loadedProfile,
+          session: data.session,
+          user: data.user,
+          requireMobileApp: false,
+        };
+      } finally {
+        validatingRef.current = false;
+      }
+    },
+    [queryUserProfile]
+  );
+
+  const signOut = useCallback(async (reasonMessage = null) => {
+    validatingRef.current = true;
+    try {
       await supabase.auth.signOut();
       setSession(null);
       setProfile(null);
-      return {
-        role: ROLES.PATIENT,
-        profile: loadedProfile,
-        requireMobileApp: true,
-      };
+      if (typeof reasonMessage === 'string' && reasonMessage.trim()) {
+        setAuthError(reasonMessage.trim());
+      }
+    } finally {
+      validatingRef.current = false;
     }
+  }, []);
 
-    // 5. If role === 'admin' (or branch-matched doctor/nurse): keep session active
-    setSession(data.session);
-    setProfile(loadedProfile);
-    return {
-      session: data.session,
-      user: data.user,
-      profile: loadedProfile,
-      role: resolvedRole,
-      requireMobileApp: false,
-    };
-  };
-
-  const signOut = useCallback(async () => {
-    await supabase.auth.signOut();
-    setSession(null);
-    setProfile(null);
+  const clearAuthError = useCallback(() => {
+    setAuthError(null);
   }, []);
 
   const value = {
@@ -295,6 +320,8 @@ export function AuthProvider({ children }) {
     role: profile?.role ?? null,
     loading,
     authError,
+    setAuthError,
+    clearAuthError,
     isAuthenticated: Boolean(
       session &&
         profile &&
@@ -304,7 +331,12 @@ export function AuthProvider({ children }) {
     isSupabaseConfigured,
     signIn,
     signOut,
-    refreshProfile: () => fetchProfile(session?.user),
+    refreshProfile: async () => {
+      if (!session?.user) return null;
+      const p = await queryUserProfile(session.user);
+      if (p) setProfile(p);
+      return p;
+    },
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

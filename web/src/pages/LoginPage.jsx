@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import {
   ShieldAlert,
@@ -14,7 +14,12 @@ import {
   Loader2,
   HelpCircle,
 } from 'lucide-react';
-import { useAuth, ROLES, getRoleHome } from '../context/AuthContext';
+import {
+  useAuth,
+  ROLES,
+  getRoleHome,
+  BRANCH_SWITCH_SIGNOUT_MESSAGE,
+} from '../context/AuthContext';
 import { useBranch } from '../context/BranchContext';
 import { formatBranchLabel } from '../config/branches';
 import { supabaseConfigWarning } from '../lib/supabase';
@@ -39,7 +44,14 @@ const TRUST_HIGHLIGHTS = [
 ];
 
 export function LoginPage() {
-  const { isAuthenticated, role, isSupabaseConfigured, signIn } = useAuth();
+  const {
+    isAuthenticated,
+    role,
+    isSupabaseConfigured,
+    authError,
+    clearAuthError,
+    signIn,
+  } = useAuth();
   const { selectedPublicBranch } = useBranch();
   const navigate = useNavigate();
 
@@ -50,12 +62,30 @@ export function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
+  const prevBranchSlugRef = useRef(selectedPublicBranch?.slug);
+
+  // Clear wrong-branch error when user switches to another branch (while keeping the branch-switch sign-out notice)
+  useEffect(() => {
+    if (
+      prevBranchSlugRef.current &&
+      selectedPublicBranch?.slug &&
+      prevBranchSlugRef.current !== selectedPublicBranch.slug
+    ) {
+      setError('');
+      if (authError && authError !== BRANCH_SWITCH_SIGNOUT_MESSAGE) {
+        clearAuthError();
+      }
+    }
+    prevBranchSlugRef.current = selectedPublicBranch?.slug;
+  }, [selectedPublicBranch?.slug, authError, clearAuthError]);
+
   if (isAuthenticated) {
     return <Navigate to={getRoleHome(role)} replace />;
   }
 
   const branchSubtext =
     selectedPublicBranch?.branchLabel || formatBranchLabel(selectedPublicBranch);
+  const visibleError = error || authError;
 
   const validateFields = () => {
     const nextErrors = { email: '', password: '' };
@@ -77,16 +107,24 @@ export function LoginPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    clearAuthError();
     if (!validateFields()) return;
 
     setSubmitting(true);
     try {
-      const result = await signIn(email.trim(), password, selectedPublicBranch);
-      if (result?.requireMobileApp || result?.role === ROLES.PATIENT) {
+      const result = await signIn(email.trim(), password, selectedPublicBranch.id);
+      if (!result || result.ok === false) {
+        setError(
+          result?.error ||
+            'Invalid email or password. Please check your credentials and try again.'
+        );
+        return;
+      }
+      if (result.requireMobileApp || result.role === ROLES.PATIENT) {
         navigate(getRoleHome(ROLES.PATIENT), { replace: true });
         return;
       }
-      navigate(getRoleHome(result?.role), { replace: true });
+      navigate(getRoleHome(result.role), { replace: true });
     } catch (err) {
       setError(
         err?.message ||
@@ -99,11 +137,9 @@ export function LoginPage() {
 
   return (
     <div className="relative min-h-screen bg-[#F2F2ED] px-4 py-6 text-[#464B71] sm:px-6 sm:py-10 lg:flex lg:items-center lg:justify-center">
-      {/* Subtle Dogs & Cats Background Design Behind the Login Layout */}
       <PagePetBackground />
 
       <div className="relative z-10 mx-auto w-full max-w-5xl space-y-4">
-        {/* Top Back to Home Navigation Bar */}
         <div className="flex flex-wrap items-center justify-between gap-2">
           <Link
             to="/"
@@ -124,19 +160,17 @@ export function LoginPage() {
 
         {/* Mobile Compact Branded Header (< lg): Logo + Subtle Branch Plain Text Underneath */}
         <div className="rounded-2xl bg-[#464B71] p-4 text-white shadow-md lg:hidden">
-          <div className="flex flex-col items-start gap-1.5">
-            <div className="flex items-center gap-3">
-              <img
-                src="/victorio_logo.jpg"
-                alt="Victorio Animal Bite Center Logo"
-                className="h-12 w-12 shrink-0 rounded-full border-2 border-[#7CD5C7] bg-white object-cover"
-              />
-              <div className="min-w-0">
-                <p className="text-sm font-extrabold text-white">
-                  Victorio Animal Bite Center
-                </p>
-                <p className="text-xs font-medium text-white/75">{branchSubtext}</p>
-              </div>
+          <div className="flex items-center gap-3">
+            <img
+              src="/victorio_logo.jpg"
+              alt="Victorio Animal Bite Center Logo"
+              className="h-12 w-12 shrink-0 rounded-full border-2 border-[#7CD5C7] bg-white object-cover"
+            />
+            <div className="min-w-0">
+              <p className="text-sm font-extrabold text-white">
+                Victorio Animal Bite Center
+              </p>
+              <p className="text-xs font-medium text-white/75">{branchSubtext}</p>
             </div>
           </div>
         </div>
@@ -179,7 +213,6 @@ export function LoginPage() {
                 </div>
               </div>
 
-              {/* 3 Concise Trust Highlights */}
               <div className="space-y-3.5 pt-2">
                 {TRUST_HIGHLIGHTS.map(({ icon: Icon, title, detail }) => (
                   <div key={title} className="flex items-start gap-3">
@@ -202,7 +235,7 @@ export function LoginPage() {
             </div>
           </div>
 
-          {/* Right Authentication Card (No branch banners/badges/pills or location callouts) */}
+          {/* Right Authentication Card */}
           <div className="p-6 sm:p-8 lg:col-span-7 xl:p-10">
             <div className="space-y-1">
               <h1 className="text-2xl font-extrabold text-[#464B71] sm:text-3xl">
@@ -220,17 +253,6 @@ export function LoginPage() {
               >
                 <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
                 <span>{supabaseConfigWarning}</span>
-              </div>
-            )}
-
-            {error && (
-              <div
-                role="alert"
-                aria-live="assertive"
-                className="mt-4 flex items-start gap-2.5 rounded-xl border-2 border-red-300 bg-red-50 px-4 py-3 text-xs font-bold text-red-800 sm:text-sm"
-              >
-                <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
-                <span>{error}</span>
               </div>
             )}
 
@@ -255,6 +277,8 @@ export function LoginPage() {
                     onChange={(e) => {
                       setEmail(e.target.value);
                       if (fieldErrors.email) setFieldErrors({ ...fieldErrors, email: '' });
+                      if (error) setError('');
+                      if (authError) clearAuthError();
                     }}
                     aria-invalid={Boolean(fieldErrors.email)}
                     aria-describedby={fieldErrors.email ? 'email-error' : undefined}
@@ -294,6 +318,8 @@ export function LoginPage() {
                       if (fieldErrors.password) {
                         setFieldErrors({ ...fieldErrors, password: '' });
                       }
+                      if (error) setError('');
+                      if (authError) clearAuthError();
                     }}
                     aria-invalid={Boolean(fieldErrors.password)}
                     aria-describedby={fieldErrors.password ? 'password-error' : undefined}
@@ -323,6 +349,19 @@ export function LoginPage() {
                 )}
               </div>
 
+              {/* Visible, Persistent High-Contrast Red Alert Banner Directly Above Sign In Button */}
+              {visibleError && (
+                <div
+                  role="alert"
+                  aria-live="assertive"
+                  data-testid="login-error-alert"
+                  className="flex items-start gap-2.5 rounded-xl border-2 border-red-400 bg-red-50 px-4 py-3 text-xs font-extrabold text-red-800 shadow-xs sm:text-sm"
+                >
+                  <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
+                  <span>{visibleError}</span>
+                </div>
+              )}
+
               {/* Submit Button */}
               <button
                 type="submit"
@@ -343,7 +382,6 @@ export function LoginPage() {
               </button>
             </form>
 
-            {/* Support & Privacy Footer Hints */}
             <div className="mt-6 space-y-2.5 border-t border-[#F2F2ED] pt-4 text-xs text-[#464B71]/80">
               <div className="flex items-start gap-2">
                 <HelpCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#118AB2]" />

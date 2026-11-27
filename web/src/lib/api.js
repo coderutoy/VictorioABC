@@ -43,3 +43,16 @@ api.interceptors.request.use(async (config) => {
   }
   return config;
 });
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const serverMessage =
+      error?.response?.data?.error ||
+      error?.response?.data?.message ||
+      error?.message ||
+      'Request failed.';
+    error.userMessage = serverMessage;
+    return Promise.reject(error);
+  }
+);

@@ -3,11 +3,14 @@ import {
   Stethoscope,
   ShieldAlert,
   Syringe,
-  AlertTriangle,
   UserCheck,
   CheckCircle2,
+  AlertCircle,
   X,
   RefreshCw,
+  ChevronDown,
+  Activity,
+  ClipboardCheck,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useBranch } from '../../context/BranchContext';
@@ -26,18 +29,24 @@ import {
 export function DoctorDashboardPage() {
   const { profile } = useAuth();
   const { activeBranch } = useBranch();
-  const branchId = activeBranch?.id || profile?.branch_id || 'santa-maria';
+  const branchId = profile?.branch_id || activeBranch?.id || 'santa-maria';
   const today = new Date().toISOString().slice(0, 10);
 
   const {
     cases,
-    doses,
     loading,
+    error: dataError,
     refresh,
-    submitDoctorAssessment,
+    updateClinicalCase,
   } = useClinicalBranchData(branchId);
 
-  const [selectedCase, setSelectedCase] = useState(null);
+  const [activeTab, setActiveTab] = useState('pending'); // 'pending' | 'active' | 'completed'
+  const [expandedCaseId, setExpandedCaseId] = useState(null);
+  const [noteDrafts, setNoteDrafts] = useState({});
+  const [busyCaseId, setBusyCaseId] = useState(null);
+
+  // WHO Rabies Exposure Assessment Modal
+  const [assessingCase, setAssessingCase] = useState(null);
   const [assessForm, setAssessForm] = useState({
     exposure_category: 'II',
     erig_required: false,
@@ -46,60 +55,96 @@ export function DoctorDashboardPage() {
     vaccine_brand: 'Speeda PVRV',
     notes: '15-minute wound wash verified. Initiate 5-milestone WHO PEP schedule (Day 0, 3, 7, 14, 28).',
   });
-  const [submitting, setSubmitting] = useState(false);
+  const [submittingAssess, setSubmittingAssess] = useState(false);
+
   const [banner, setBanner] = useState('');
+  const [actionError, setActionError] = useState('');
 
-  const pendingDoctorCases = useMemo(
-    () =>
-      cases.filter((c) =>
-        ['pending_doctor', 'queued_nurse'].includes(c.status)
-      ),
+  const pendingCases = useMemo(
+    () => cases.filter((c) => c.status === 'pending_doctor' || c.status === 'queued_nurse'),
     [cases]
   );
 
-  const highRiskCases = useMemo(
-    () =>
-      cases.filter(
-        (c) => c.exposure_category === 'III' && c.status !== 'completed'
-      ),
+  const activePepCases = useMemo(
+    () => cases.filter((c) => c.status === 'active_pep'),
     [cases]
   );
 
-  const overdueDoses = useMemo(
-    () =>
-      doses.filter(
-        (d) => d.scheduled_date < today && d.status === 'scheduled'
-      ),
-    [doses, today]
+  const completedCases = useMemo(
+    () => cases.filter((c) => c.status === 'completed'),
+    [cases]
   );
 
-  const activeAssessmentCase = selectedCase || pendingDoctorCases[0] || null;
-
-  const handleSelectCase = (c) => {
-    setSelectedCase(c);
-    setAssessForm((prev) => ({
-      ...prev,
-      exposure_category: c.exposure_category || 'II',
-      erig_required: c.exposure_category === 'III' || Boolean(c.erig_required),
+  const openAssessmentModal = (c) => {
+    setActionError('');
+    setAssessingCase(c);
+    const cat = c.exposure_category || 'II';
+    setAssessForm({
+      exposure_category: cat,
+      erig_required: cat === 'III' || Boolean(c.erig_required),
       tetanus_given: c.tetanus_given ?? true,
+      day0_date: today,
+      vaccine_brand: 'Speeda PVRV',
       notes:
         c.notes ||
         '15-minute wound wash verified. Initiate WHO PEP schedule (Day 0, 3, 7, 14, 28).',
-    }));
+    });
   };
 
-  const handleSubmitOrder = async (e) => {
+  const handleSubmitAssessment = async (e) => {
     e.preventDefault();
-    if (!activeAssessmentCase) return;
-    setSubmitting(true);
+    if (!assessingCase) return;
+    setSubmittingAssess(true);
+    setActionError('');
     try {
-      await submitDoctorAssessment(activeAssessmentCase.id, assessForm);
+      const cat = assessForm.exposure_category;
+      const nextStatus = cat === 'I' ? 'completed' : 'active_pep';
+      await updateClinicalCase(assessingCase.id, {
+        exposure_category: cat,
+        status: nextStatus,
+        erig_required: Boolean(assessForm.erig_required || cat === 'III'),
+        tetanus_given: Boolean(assessForm.tetanus_given),
+        day0_date: assessForm.day0_date,
+        vaccine_brand: assessForm.vaccine_brand,
+        notes: assessForm.notes,
+      });
       setBanner(
-        `Validated ${activeAssessmentCase.patient?.full_name || activeAssessmentCase.case_number} as WHO Category ${assessForm.exposure_category} and auto-generated Day 0, 3, 7, 14, 28 PEP doses.`
+        cat === 'I'
+          ? `Approved WHO Category I assessment for ${assessingCase.patient?.full_name || assessingCase.case_number} (marked completed, no PEP vaccine required).`
+          : `Approved WHO Category ${cat} assessment for ${assessingCase.patient?.full_name || assessingCase.case_number} and generated Day 0, 3, 7, 14, 28 PEP schedule.`
       );
-      setSelectedCase(null);
+      setAssessingCase(null);
+    } catch (err) {
+      setActionError(err.userMessage || err.message || 'Failed to save clinical assessment.');
     } finally {
-      setSubmitting(false);
+      setSubmittingAssess(false);
+    }
+  };
+
+  const handleSaveFollowUpNotes = async (c) => {
+    setBusyCaseId(c.id);
+    setActionError('');
+    try {
+      const nextNotes = noteDrafts[c.id] !== undefined ? noteDrafts[c.id] : c.notes;
+      await updateClinicalCase(c.id, { notes: nextNotes });
+      setBanner(`Saved follow-up clinical notes for ${c.case_number}.`);
+    } catch (err) {
+      setActionError(err.userMessage || err.message || 'Failed to save notes.');
+    } finally {
+      setBusyCaseId(null);
+    }
+  };
+
+  const handleMarkCaseCompleted = async (c) => {
+    setBusyCaseId(c.id);
+    setActionError('');
+    try {
+      await updateClinicalCase(c.id, { status: 'completed' });
+      setBanner(`Marked case ${c.case_number} (${c.patient?.full_name}) as completed.`);
+    } catch (err) {
+      setActionError(err.userMessage || err.message || 'Failed to complete case.');
+    } finally {
+      setBusyCaseId(null);
     }
   };
 
@@ -109,7 +154,7 @@ export function DoctorDashboardPage() {
         eyebrow="Clinical Assessment & Prescription"
         icon={Stethoscope}
         title={`Doctor Workspace — ${profile?.full_name || 'Dr. Maria Santos'}`}
-        subtitle="WHO Category I–III consultation queue, ERIG/tetanus indication, and automated Day 0, 3, 7, 14, 28 PEP schedule orders."
+        subtitle="WHO Category I–III exposure assessment, ERIG/tetanus orders, and Day 0–28 active PEP timeline monitoring."
         branchLabel={activeBranch?.name || 'Victorio ABC — Santa Maria, Bulacan'}
         branchAddress={activeBranch?.address}
       >
@@ -140,43 +185,319 @@ export function DoctorDashboardPage() {
         </div>
       )}
 
+      {(actionError || dataError) && (
+        <div
+          role="alert"
+          className="flex items-center justify-between rounded-2xl border-2 border-red-300 bg-red-50 px-4 py-3 text-xs font-extrabold text-red-800"
+        >
+          <span className="inline-flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 text-red-600" />
+            <span>{actionError || dataError}</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => setActionError('')}
+            className="rounded-lg p-1 hover:bg-red-100"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
+      {/* KPI Row */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <KpiCard
-          label="Pending Assessment"
+          label="Pending Clinical Assessments"
           icon={UserCheck}
           tone="amber"
-          value={pendingDoctorCases.length}
+          value={pendingCases.length}
           hint="Cases awaiting WHO Category I–III order"
           loading={loading}
         />
         <KpiCard
-          label="Open Category III Cases"
-          icon={ShieldAlert}
-          tone="red"
-          value={highRiskCases.length}
-          hint="High-risk transdermal / ERIG cases"
+          label="Active PEP Cases"
+          icon={Activity}
+          tone="blue"
+          value={activePepCases.length}
+          hint="Patients undergoing Day 0–28 schedule"
           loading={loading}
         />
         <KpiCard
-          label="Overdue Follow-Ups"
-          icon={AlertTriangle}
-          tone="navy"
-          value={overdueDoses.length}
-          hint="Past-due scheduled PEP doses"
+          label="Completed Cases"
+          icon={ClipboardCheck}
+          tone="mint"
+          value={completedCases.length}
+          hint="Cleared & completed consultations"
           loading={loading}
         />
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-2">
-        {/* 1. Patients Pending Assessment / Consultation Queue */}
+      {/* Tab Bar */}
+      <div
+        role="tablist"
+        aria-label="Doctor workspace sections"
+        className="flex flex-wrap items-center gap-2 border-b border-[#DDDCD4] pb-3"
+      >
+        {[
+          {
+            id: 'pending',
+            label: `Pending Clinical Assessments (${pendingCases.length})`,
+            icon: Stethoscope,
+          },
+          {
+            id: 'active',
+            label: `Active PEP Monitoring (${activePepCases.length})`,
+            icon: Activity,
+          },
+          {
+            id: 'completed',
+            label: `Completed Cases (${completedCases.length})`,
+            icon: ClipboardCheck,
+          },
+        ].map(({ id, label, icon: Icon }) => {
+          const isActive = activeTab === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              onClick={() => setActiveTab(id)}
+              className={`inline-flex min-h-[44px] items-center gap-2 rounded-xl px-4 py-2 text-xs font-extrabold transition sm:text-sm ${
+                isActive
+                  ? 'bg-[#464B71] text-[#7CD5C7] shadow-sm'
+                  : 'bg-white text-[#464B71] hover:bg-[#DDDCD4]/60'
+              }`}
+            >
+              <Icon className="h-4 w-4" />
+              <span>{label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* TAB 1: Pending Clinical Assessments (`pending_doctor`) */}
+      {activeTab === 'pending' && (
         <Panel
-          title="Patients Pending Assessment (pending_doctor)"
-          subtitle="Select a patient encounter to classify WHO Category I–III and generate PEP doses"
+          title="Pending Clinical Assessments (pending_doctor)"
+          subtitle="Click 'Assess Patient' to classify WHO Exposure Category (I / II / III) and auto-generate the Day 0, 3, 7, 14, 28 PEP schedule"
         >
-          {pendingDoctorCases.length === 0 ? (
+          {pendingCases.length === 0 ? (
             <EmptyState
               loading={loading}
-              message="No patients are currently waiting for physician assessment. Cases registered by the Nurse appear here automatically."
+              message="No patients are currently waiting for physician assessment."
+            />
+          ) : (
+            <TableWrap>
+              <thead>
+                <tr>
+                  <Th>Case #</Th>
+                  <Th>Patient</Th>
+                  <Th>Animal &amp; Wound Site</Th>
+                  <Th>Exposure Date</Th>
+                  <Th>Nurse Triage Notes</Th>
+                  <Th>Status</Th>
+                  <Th>Action</Th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#F2F2ED]">
+                {pendingCases.map((c) => (
+                  <tr key={c.id}>
+                    <Td className="font-mono text-xs font-bold">{c.case_number}</Td>
+                    <Td>
+                      <p className="font-bold">{c.patient?.full_name || 'Patient'}</p>
+                      <p className="text-[11px] text-[#464B71]/70">
+                        {c.patient?.patient_code} • Age {c.patient?.age ?? '—'}
+                      </p>
+                    </Td>
+                    <Td className="capitalize">
+                      {c.animal_type} • {c.wound_site}
+                    </Td>
+                    <Td className="whitespace-nowrap">{c.exposure_date}</Td>
+                    <Td className="max-w-xs text-xs text-[#464B71]/85">
+                      {c.notes || '—'}
+                    </Td>
+                    <Td>
+                      <StatusPill tone="amber">{c.status}</StatusPill>
+                    </Td>
+                    <Td>
+                      <button
+                        type="button"
+                        onClick={() => openAssessmentModal(c)}
+                        className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl bg-[#118AB2] px-3.5 py-1.5 text-xs font-extrabold text-white hover:bg-[#0D6E8E]"
+                      >
+                        <Stethoscope className="h-3.5 w-3.5" />
+                        <span>Assess Patient</span>
+                      </button>
+                    </Td>
+                  </tr>
+                ))}
+              </tbody>
+            </TableWrap>
+          )}
+        </Panel>
+      )}
+
+      {/* TAB 2: Active PEP Monitoring (`active_pep`) */}
+      {activeTab === 'active' && (
+        <Panel
+          title="Active PEP Monitoring (Day 0, 3, 7, 14, 28 Timeline)"
+          subtitle="Expand any active case to inspect its 5-dose milestone timeline, save follow-up clinical notes, or mark completed"
+        >
+          {activePepCases.length === 0 ? (
+            <EmptyState
+              loading={loading}
+              message="No active PEP cases at this branch."
+            />
+          ) : (
+            <div className="space-y-3">
+              {activePepCases.map((c) => {
+                const isExpanded = expandedCaseId === c.id;
+                const caseDoses = Array.isArray(c.pep_doses) ? c.pep_doses : [];
+                const completedCount = caseDoses.filter(
+                  (d) => d.status === 'completed'
+                ).length;
+                const isBusy = busyCaseId === c.id;
+
+                return (
+                  <div
+                    key={c.id}
+                    className="overflow-hidden rounded-2xl border border-[#DDDCD4] bg-[#F2F2ED]/40"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-4">
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-mono text-xs font-extrabold text-[#118AB2]">
+                            {c.case_number}
+                          </span>
+                          <span className="text-sm font-extrabold text-[#464B71]">
+                            {c.patient?.full_name || 'Patient'}
+                          </span>
+                          <StatusPill
+                            tone={c.exposure_category === 'III' ? 'red' : 'amber'}
+                          >
+                            WHO Category {c.exposure_category || 'II'}
+                          </StatusPill>
+                          {c.erig_required && (
+                            <StatusPill tone="red">ERIG Infiltration</StatusPill>
+                          )}
+                          {c.tetanus_given && (
+                            <StatusPill tone="blue">Tetanus Given</StatusPill>
+                          )}
+                        </div>
+                        <p className="text-xs text-[#464B71]/75 capitalize">
+                          {c.animal_type} • {c.wound_site} • Exposed {c.exposure_date} •{' '}
+                          <strong>
+                            {completedCount}/{caseDoses.length || 5} doses completed
+                          </strong>
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setExpandedCaseId(isExpanded ? null : c.id)
+                          }
+                          className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl border border-[#DDDCD4] bg-[#F2F2ED] px-3.5 py-1.5 text-xs font-extrabold text-[#464B71] hover:bg-[#DDDCD4]"
+                        >
+                          <span>{isExpanded ? 'Hide Timeline' : 'View 5-Dose Timeline'}</span>
+                          <ChevronDown
+                            className={`h-4 w-4 transition-transform ${
+                              isExpanded ? 'rotate-180' : ''
+                            }`}
+                          />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isBusy}
+                          onClick={() => handleMarkCaseCompleted(c)}
+                          className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-1.5 text-xs font-extrabold text-white hover:bg-emerald-700 disabled:opacity-50"
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          <span>Mark Case Completed</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {isExpanded && (
+                      <div className="border-t border-[#DDDCD4] p-4 space-y-4">
+                        {/* 5-Dose Day 0-28 Timeline Grid */}
+                        <div className="grid gap-2.5 sm:grid-cols-5">
+                          {caseDoses.map((d) => (
+                            <div
+                              key={d.id}
+                              className={`rounded-xl border p-3 text-xs ${
+                                d.status === 'completed'
+                                  ? 'border-emerald-300 bg-emerald-50 text-emerald-900'
+                                  : d.status === 'missed'
+                                    ? 'border-red-300 bg-red-50 text-red-900'
+                                    : 'border-[#DDDCD4] bg-white text-[#464B71]'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between font-extrabold">
+                                <span>Day {d.dose_day}</span>
+                                <span className="uppercase text-[10px]">{d.status}</span>
+                              </div>
+                              <p className="mt-1 font-semibold">{d.scheduled_date}</p>
+                              <p className="mt-0.5 text-[11px] opacity-80">
+                                {d.vaccine_brand || 'Speeda PVRV'}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Follow-up Clinical Notes Editor */}
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                          <div className="flex-1">
+                            <label className="block text-xs font-extrabold text-[#464B71]">
+                              Follow-Up Clinical Notes
+                            </label>
+                            <textarea
+                              rows={2}
+                              value={
+                                noteDrafts[c.id] !== undefined
+                                  ? noteDrafts[c.id]
+                                  : c.notes || ''
+                              }
+                              onChange={(e) =>
+                                setNoteDrafts({
+                                  ...noteDrafts,
+                                  [c.id]: e.target.value,
+                                })
+                              }
+                              className="mt-1 w-full rounded-xl border border-[#DDDCD4] bg-white px-3 py-2 text-xs font-semibold text-[#464B71]"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            disabled={isBusy}
+                            onClick={() => handleSaveFollowUpNotes(c)}
+                            className="min-h-[40px] shrink-0 rounded-xl bg-[#118AB2] px-4 py-2 text-xs font-extrabold text-white hover:bg-[#0D6E8E]"
+                          >
+                            Save Follow-Up Notes
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Panel>
+      )}
+
+      {/* TAB 3: Completed Cases (`completed`) */}
+      {activeTab === 'completed' && (
+        <Panel
+          title="Completed Cases History (completed)"
+          subtitle="Read-only clinical record of completed PEP regimens and Category I clearances"
+        >
+          {completedCases.length === 0 ? (
+            <EmptyState
+              loading={loading}
+              message="No completed cases recorded for this branch yet."
             />
           ) : (
             <TableWrap>
@@ -185,36 +506,52 @@ export function DoctorDashboardPage() {
                   <Th>Case #</Th>
                   <Th>Patient</Th>
                   <Th>Exposure</Th>
-                  <Th>Status</Th>
-                  <Th>Action</Th>
+                  <Th>WHO Category</Th>
+                  <Th>ERIG / Tetanus</Th>
+                  <Th>Doses Completed</Th>
+                  <Th>Clinical Notes</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#F2F2ED]">
-                {pendingDoctorCases.map((c) => {
-                  const isCurrent = activeAssessmentCase?.id === c.id;
+                {completedCases.map((c) => {
+                  const caseDoses = Array.isArray(c.pep_doses) ? c.pep_doses : [];
+                  const doneDoses = caseDoses.filter((d) => d.status === 'completed');
                   return (
-                    <tr
-                      key={c.id}
-                      className={isCurrent ? 'bg-[#EAFBF8]' : ''}
-                    >
+                    <tr key={c.id}>
                       <Td className="font-mono text-xs font-bold">{c.case_number}</Td>
-                      <Td className="font-bold">
-                        {c.patient?.full_name || 'Walk-In Patient'}
+                      <Td>
+                        <p className="font-bold">{c.patient?.full_name || 'Patient'}</p>
+                        <p className="text-[11px] text-[#464B71]/70">
+                          {c.patient?.patient_code}
+                        </p>
                       </Td>
                       <Td className="capitalize">
-                        {c.animal_type} • {c.wound_site}
+                        {c.animal_type} • {c.wound_site} ({c.exposure_date})
                       </Td>
                       <Td>
-                        <StatusPill tone="amber">{c.status}</StatusPill>
-                      </Td>
-                      <Td>
-                        <button
-                          type="button"
-                          onClick={() => handleSelectCase(c)}
-                          className="min-h-[38px] rounded-lg bg-[#118AB2] px-3 py-1.5 text-xs font-extrabold text-white hover:bg-[#0D6E8E]"
+                        <StatusPill
+                          tone={
+                            c.exposure_category === 'III'
+                              ? 'red'
+                              : c.exposure_category === 'II'
+                                ? 'amber'
+                                : 'green'
+                          }
                         >
-                          {isCurrent ? 'Selected' : 'Assess Case'}
-                        </button>
+                          Category {c.exposure_category || 'I'}
+                        </StatusPill>
+                      </Td>
+                      <Td className="text-xs">
+                        {c.erig_required ? 'ERIG + ' : ''}
+                        {c.tetanus_given ? 'Tetanus' : 'Wash Only'}
+                      </Td>
+                      <Td>
+                        <StatusPill tone="green">
+                          {doneDoses.length}/{caseDoses.length} doses
+                        </StatusPill>
+                      </Td>
+                      <Td className="max-w-xs text-xs text-[#464B71]/85">
+                        {c.notes || '—'}
                       </Td>
                     </tr>
                   );
@@ -223,36 +560,42 @@ export function DoctorDashboardPage() {
             </TableWrap>
           )}
         </Panel>
+      )}
 
-        {/* 2. Clinical Review & Prescription Workspace */}
-        <Panel
-          title="Clinical Review & Prescription Workspace"
-          subtitle="Submit WHO Category I–III assessment and auto-generate Day 0, 3, 7, 14, 28 PEP doses"
+      {/* Modal: WHO Rabies Exposure Assessment */}
+      {assessingCase && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="WHO Rabies Exposure Assessment"
+          className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-[#343857]/70 p-4"
         >
-          {!activeAssessmentCase ? (
-            <EmptyState
-              loading={loading}
-              message="Select a patient from the consultation queue on the left to prescribe a WHO Category I–III PEP order."
-            />
-          ) : (
-            <form onSubmit={handleSubmitOrder} className="space-y-3.5 text-xs sm:text-sm">
-              <div className="rounded-xl border border-[#7CD5C7] bg-[#EAFBF8] p-3.5">
-                <p className="text-xs font-extrabold text-[#118AB2]">
-                  Active Patient Encounter: {activeAssessmentCase.case_number}
-                </p>
-                <p className="mt-0.5 text-sm font-extrabold text-[#464B71]">
-                  {activeAssessmentCase.patient?.full_name || 'Walk-In Patient'}
-                </p>
-                <p className="text-xs text-[#464B71]/80 capitalize">
-                  Animal: {activeAssessmentCase.animal_type} &bull; Wound Site:{' '}
-                  {activeAssessmentCase.wound_site} &bull; Exposed:{' '}
-                  {activeAssessmentCase.exposure_date}
+          <div className="w-full max-w-lg rounded-3xl border-2 border-[#7CD5C7] bg-white p-6 text-[#464B71] shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-[#F2F2ED] pb-3">
+              <div>
+                <h2 className="text-lg font-extrabold text-[#464B71]">
+                  WHO Rabies Exposure Assessment — {assessingCase.case_number}
+                </h2>
+                <p className="text-xs text-[#464B71]/75">
+                  Patient: <strong>{assessingCase.patient?.full_name}</strong> •{' '}
+                  <span className="capitalize">
+                    {assessingCase.animal_type} ({assessingCase.wound_site})
+                  </span>
                 </p>
               </div>
+              <button
+                type="button"
+                onClick={() => setAssessingCase(null)}
+                className="rounded-xl bg-[#F2F2ED] p-2 text-[#464B71]"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
 
+            <form onSubmit={handleSubmitAssessment} className="space-y-3.5 text-xs sm:text-sm">
               <div>
                 <label className="block font-extrabold text-[#464B71]">
-                  1. WHO Exposure Category Classification *
+                  1. Select WHO Exposure Category *
                 </label>
                 <div className="mt-1.5 grid grid-cols-3 gap-2">
                   {[
@@ -288,7 +631,7 @@ export function DoctorDashboardPage() {
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
                   <label className="block font-extrabold text-[#464B71]">
-                    Day 0 Start Date *
+                    Day 0 Initiation Date *
                   </label>
                   <input
                     type="date"
@@ -300,10 +643,9 @@ export function DoctorDashboardPage() {
                     className="mt-1 min-h-[42px] w-full rounded-xl border border-[#DDDCD4] bg-[#F2F2ED]/60 px-3 py-2 font-semibold text-[#464B71]"
                   />
                 </div>
-
                 <div>
                   <label className="block font-extrabold text-[#464B71]">
-                    Anti-Rabies Vaccine Brand
+                    Recommended Vaccine Brand
                   </label>
                   <select
                     value={assessForm.vaccine_brand}
@@ -334,7 +676,7 @@ export function DoctorDashboardPage() {
                     }
                     className="h-4 w-4 accent-[#118AB2]"
                   />
-                  <span>Equirab ERIG (40 IU/kg) Infiltration Required</span>
+                  <span>ERIG Infiltration Required (40 IU/kg)</span>
                 </label>
 
                 <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-[#DDDCD4] bg-[#F2F2ED]/50 p-3 text-xs font-bold text-[#464B71]">
@@ -349,13 +691,13 @@ export function DoctorDashboardPage() {
                     }
                     className="h-4 w-4 accent-[#118AB2]"
                   />
-                  <span>Tetanus Toxoid (TT 0.5 mL IM) Ordered</span>
+                  <span>Tetanus Toxoid Given (0.5 mL IM)</span>
                 </label>
               </div>
 
               <div>
                 <label className="block font-extrabold text-[#464B71]">
-                  Physician Clinical Notes &amp; Instructions
+                  Clinical Notes &amp; Prescription Instructions
                 </label>
                 <textarea
                   rows={2}
@@ -367,103 +709,31 @@ export function DoctorDashboardPage() {
                 />
               </div>
 
-              <button
-                type="submit"
-                disabled={submitting}
-                className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-[#118AB2] px-5 py-2.5 text-xs font-extrabold text-white shadow-sm hover:bg-[#0D6E8E] disabled:opacity-60"
-              >
-                <Syringe className="h-4 w-4" />
-                <span>
-                  {submitting
-                    ? 'Saving Order & Generating Doses…'
-                    : 'Approve WHO Assessment & Generate Day 0, 3, 7, 14, 28 PEP Doses'}
-                </span>
-              </button>
+              <div className="flex items-center justify-end gap-2 border-t border-[#F2F2ED] pt-3">
+                <button
+                  type="button"
+                  onClick={() => setAssessingCase(null)}
+                  className="min-h-[42px] rounded-xl border border-[#DDDCD4] px-4 py-2 text-xs font-extrabold text-[#464B71]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingAssess}
+                  className="inline-flex min-h-[42px] items-center gap-1.5 rounded-xl bg-[#118AB2] px-5 py-2 text-xs font-extrabold text-white shadow-sm hover:bg-[#0D6E8E]"
+                >
+                  <Syringe className="h-4 w-4" />
+                  <span>
+                    {submittingAssess
+                      ? 'Approving & Generating…'
+                      : 'Approve & Generate PEP Schedule'}
+                  </span>
+                </button>
+              </div>
             </form>
-          )}
-        </Panel>
-      </div>
-
-      {/* 3. Recent Cases & Follow-Up Alerts */}
-      <div className="grid gap-5 xl:grid-cols-2">
-        <Panel
-          title="Recent High-Risk (Category III) Cases"
-          subtitle="Active Category III cases requiring ERIG infiltration and close follow-up"
-        >
-          {highRiskCases.length === 0 ? (
-            <EmptyState
-              loading={loading}
-              message="No open WHO Category III cases at this branch."
-            />
-          ) : (
-            <TableWrap>
-              <thead>
-                <tr>
-                  <Th>Case #</Th>
-                  <Th>Patient</Th>
-                  <Th>Exposure</Th>
-                  <Th>ERIG</Th>
-                  <Th>Status</Th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#F2F2ED]">
-                {highRiskCases.map((c) => (
-                  <tr key={c.id}>
-                    <Td className="font-mono text-xs font-bold">{c.case_number}</Td>
-                    <Td className="font-bold">{c.patient?.full_name || 'Patient'}</Td>
-                    <Td className="capitalize">
-                      {c.animal_type} • {c.wound_site}
-                    </Td>
-                    <Td>
-                      <StatusPill tone={c.erig_required ? 'red' : 'navy'}>
-                        {c.erig_required ? 'ERIG Ordered' : 'No ERIG'}
-                      </StatusPill>
-                    </Td>
-                    <Td>
-                      <StatusPill tone="blue">{c.status}</StatusPill>
-                    </Td>
-                  </tr>
-                ))}
-              </tbody>
-            </TableWrap>
-          )}
-        </Panel>
-
-        <Panel
-          title="Follow-Up Alerts"
-          subtitle="Patients with past-due scheduled PEP doses"
-        >
-          {overdueDoses.length === 0 ? (
-            <EmptyState
-              loading={loading}
-              message="No overdue follow-up PEP doses at this branch."
-            />
-          ) : (
-            <TableWrap>
-              <thead>
-                <tr>
-                  <Th>Case #</Th>
-                  <Th>Patient</Th>
-                  <Th>Dose</Th>
-                  <Th>Scheduled Date</Th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#F2F2ED]">
-                {overdueDoses.map((d) => (
-                  <tr key={d.id}>
-                    <Td className="font-mono text-xs font-bold">{d.case_number}</Td>
-                    <Td className="font-bold">{d.patient?.full_name || 'Patient'}</Td>
-                    <Td className="font-extrabold">Day {d.dose_day}</Td>
-                    <Td>
-                      <StatusPill tone="red">{d.scheduled_date}</StatusPill>
-                    </Td>
-                  </tr>
-                ))}
-              </tbody>
-            </TableWrap>
-          )}
-        </Panel>
-      </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
