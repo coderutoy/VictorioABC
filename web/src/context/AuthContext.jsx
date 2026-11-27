@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import api from '../lib/api';
 import {
   BRANCH_STORAGE_KEY,
   DEFAULT_BRANCH_SLUG,
@@ -22,6 +23,9 @@ export const ROLE_HOME_PATHS = Object.freeze({
   [ROLES.PATIENT]: '/mobile-app-only',
 });
 
+export const THEME_STORAGE_KEY = 'victorio_abc_dashboard_theme';
+export const NOTIF_PREFS_STORAGE_KEY = 'victorio_abc_notification_prefs';
+
 /** Post-login landing route for each role (patients go to /mobile-app-only). */
 export function getRoleHome(role) {
   return ROLE_HOME_PATHS[String(role || '').toLowerCase()] || '/login';
@@ -40,6 +44,13 @@ function normalizeBranchSlug(val) {
   return getBranchBySlug(cleaned).slug;
 }
 
+const DEFAULT_NOTIF_PREFS = {
+  critical_clinical: true,
+  cold_chain: true,
+  inventory_alerts: true,
+  sound_alerts: false,
+};
+
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
@@ -47,9 +58,36 @@ export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(null);
+  const [bufferMessage, setBufferMessage] = useState(null);
+
+  const [dashboardTheme, setDashboardTheme] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = window.localStorage.getItem(THEME_STORAGE_KEY);
+      if (saved === 'dark' || saved === 'light') return saved;
+    }
+    return 'light';
+  });
+
+  const [notificationPrefs, setNotificationPrefs] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = window.localStorage.getItem(NOTIF_PREFS_STORAGE_KEY);
+        if (raw) return { ...DEFAULT_NOTIF_PREFS, ...JSON.parse(raw) };
+      } catch {
+        // ignore parse errors
+      }
+    }
+    return DEFAULT_NOTIF_PREFS;
+  });
 
   // Prevents onAuthStateChange from prematurely authenticating or wiping authError during atomic signIn validation
   const validatingRef = useRef(false);
+
+  const runBuffer = useCallback(async (message, minMs = 550) => {
+    setBufferMessage(message);
+    await new Promise((resolve) => setTimeout(resolve, minMs));
+    setBufferMessage(null);
+  }, []);
 
   const queryUserProfile = useCallback(async (authUser) => {
     const userId = typeof authUser === 'string' ? authUser : authUser?.id;
@@ -57,7 +95,7 @@ export function AuthProvider({ children }) {
 
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, email, full_name, role, branch_id, license_number, is_active, created_at')
+      .select('*')
       .eq('id', userId)
       .maybeSingle();
 
@@ -70,6 +108,12 @@ export function AuthProvider({ children }) {
     if (!error && data) {
       const role = String(data.role || meta.role || 'patient').toLowerCase();
       const rawBranch = data.branch_id !== undefined ? data.branch_id : meta.branch_id;
+      const prcLicense =
+        data.prc_license_number ||
+        meta.prc_license_number ||
+        data.license_number ||
+        meta.license_number ||
+        null;
       return {
         ...data,
         role,
@@ -77,11 +121,18 @@ export function AuthProvider({ children }) {
           role === ROLES.ADMIN || role === ROLES.PATIENT
             ? normalizeBranchSlug(rawBranch) || null
             : normalizeBranchSlug(rawBranch),
+        license_number: prcLicense,
+        prc_license_number: prcLicense,
+        prc_expiry_date: data.prc_expiry_date || meta.prc_expiry_date || '2028-06-30',
+        theme_preference: data.theme_preference || meta.theme_preference || 'light',
+        notification_prefs:
+          data.notification_prefs || meta.notification_prefs || DEFAULT_NOTIF_PREFS,
       };
     }
 
     if (resolvedUser && meta.role) {
       const role = String(meta.role).toLowerCase();
+      const prcLicense = meta.prc_license_number || meta.license_number || null;
       return {
         id: resolvedUser.id,
         email: resolvedUser.email || null,
@@ -91,12 +142,49 @@ export function AuthProvider({ children }) {
           role === ROLES.ADMIN || role === ROLES.PATIENT
             ? normalizeBranchSlug(meta.branch_id) || null
             : normalizeBranchSlug(meta.branch_id),
-        license_number: meta.license_number || null,
+        license_number: prcLicense,
+        prc_license_number: prcLicense,
+        prc_expiry_date: meta.prc_expiry_date || '2028-06-30',
+        theme_preference: meta.theme_preference || 'light',
+        notification_prefs: meta.notification_prefs || DEFAULT_NOTIF_PREFS,
         is_active: meta.is_active !== false,
       };
     }
 
     return null;
+  }, []);
+
+  const syncProfilePreferencesToState = useCallback((loadedProfile) => {
+    if (!loadedProfile) return;
+    if (
+      loadedProfile.theme_preference === 'dark' ||
+      loadedProfile.theme_preference === 'light'
+    ) {
+      const savedLocal =
+        typeof window !== 'undefined'
+          ? window.localStorage.getItem(THEME_STORAGE_KEY)
+          : null;
+      const resolvedTheme = savedLocal || loadedProfile.theme_preference;
+      setDashboardTheme(resolvedTheme);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(THEME_STORAGE_KEY, resolvedTheme);
+      }
+    }
+    if (loadedProfile.notification_prefs) {
+      const merged = { ...DEFAULT_NOTIF_PREFS, ...loadedProfile.notification_prefs };
+      setNotificationPrefs(merged);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(NOTIF_PREFS_STORAGE_KEY, JSON.stringify(merged));
+      }
+    }
+    // Lock storage branch to assigned branch for doctor/nurse
+    if (
+      (loadedProfile.role === ROLES.DOCTOR || loadedProfile.role === ROLES.NURSE) &&
+      loadedProfile.branch_id &&
+      typeof window !== 'undefined'
+    ) {
+      window.localStorage.setItem(BRANCH_STORAGE_KEY, loadedProfile.branch_id);
+    }
   }, []);
 
   useEffect(() => {
@@ -117,23 +205,11 @@ export function AuthProvider({ children }) {
 
         if (initialSession?.user?.id) {
           const loadedProfile = await queryUserProfile(initialSession.user);
-          const currentBranchSlug =
-            typeof window !== 'undefined'
-              ? getBranchBySlug(
-                  window.localStorage.getItem(BRANCH_STORAGE_KEY) || DEFAULT_BRANCH_SLUG
-                ).slug
-              : DEFAULT_BRANCH_SLUG;
-
-          const isStaffMismatch =
-            (loadedProfile?.role === ROLES.DOCTOR ||
-              loadedProfile?.role === ROLES.NURSE) &&
-            loadedProfile?.branch_id !== currentBranchSlug;
 
           if (
             !loadedProfile ||
             loadedProfile.is_active === false ||
-            loadedProfile.role === ROLES.PATIENT ||
-            isStaffMismatch
+            loadedProfile.role === ROLES.PATIENT
           ) {
             await supabase.auth.signOut();
             if (isMounted) {
@@ -141,6 +217,7 @@ export function AuthProvider({ children }) {
               setProfile(null);
             }
           } else if (isMounted) {
+            syncProfilePreferencesToState(loadedProfile);
             setSession(initialSession);
             setProfile(loadedProfile);
           }
@@ -160,7 +237,6 @@ export function AuthProvider({ children }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, nextSession) => {
-      // Do NOT interfere while signIn() is performing atomic branch verification
       if (validatingRef.current) {
         return;
       }
@@ -168,7 +244,6 @@ export function AuthProvider({ children }) {
       if (event === 'SIGNED_OUT' || !nextSession?.user?.id) {
         setSession(null);
         setProfile(null);
-        // Never wipe authError on SIGNED_OUT so wrong-branch or branch-switch messages stay visible
         return;
       }
 
@@ -177,20 +252,7 @@ export function AuthProvider({ children }) {
         return;
       }
 
-      const currentBranchSlug =
-        typeof window !== 'undefined'
-          ? getBranchBySlug(
-              window.localStorage.getItem(BRANCH_STORAGE_KEY) || DEFAULT_BRANCH_SLUG
-            ).slug
-          : DEFAULT_BRANCH_SLUG;
-
-      if (
-        (loadedProfile.role === ROLES.DOCTOR || loadedProfile.role === ROLES.NURSE) &&
-        loadedProfile.branch_id !== currentBranchSlug
-      ) {
-        return;
-      }
-
+      syncProfilePreferencesToState(loadedProfile);
       setSession(nextSession);
       setProfile(loadedProfile);
     });
@@ -199,20 +261,19 @@ export function AuthProvider({ children }) {
       isMounted = false;
       subscription.unsubscribe();
     };
-  }, [queryUserProfile]);
+  }, [queryUserProfile, syncProfilePreferencesToState]);
 
   /**
-   * Atomic sign-in with passive database `branch_id` validation:
-   * - Sets validatingRef.current = true so onAuthStateChange never races or clears authError.
-   * - Returns `{ ok: true, role, profile }` on success, or `{ ok: false, error }` on failure
-   *   while also persisting `authError` in context.
+   * Atomic sign-in with passive database `branch_id` validation and smooth clinical BufferLoader.
    */
   const signIn = useCallback(
     async (email, password, activeBranchArg) => {
       validatingRef.current = true;
       setAuthError(null);
+      setBufferMessage('Verifying credentials & branch lock...');
 
       try {
+        const startMs = Date.now();
         const activeBranchObj =
           typeof activeBranchArg === 'string'
             ? getBranchBySlug(activeBranchArg)
@@ -264,6 +325,12 @@ export function AuthProvider({ children }) {
           };
         }
 
+        // Ensure ~550ms realistic clinical buffer display
+        const elapsed = Date.now() - startMs;
+        if (elapsed < 550) {
+          await new Promise((r) => setTimeout(r, 550 - elapsed));
+        }
+
         // 4. Patient role: sign out web session and route to /mobile-app-only
         if (resolvedRole === ROLES.PATIENT) {
           await supabase.auth.signOut();
@@ -278,6 +345,7 @@ export function AuthProvider({ children }) {
         }
 
         // 5. Validation passed for admin, doctor, or nurse
+        syncProfilePreferencesToState(loadedProfile);
         setSession(data.session);
         setProfile(loadedProfile);
         return {
@@ -289,63 +357,115 @@ export function AuthProvider({ children }) {
           requireMobileApp: false,
         };
       } finally {
+        setBufferMessage(null);
         validatingRef.current = false;
       }
     },
-    [queryUserProfile]
+    [queryUserProfile, syncProfilePreferencesToState]
   );
 
   const signOut = useCallback(async (reasonMessage = null) => {
     validatingRef.current = true;
+    setBufferMessage('Signing out of clinical workspace...');
     try {
-      await supabase.auth.signOut();
+      const startMs = Date.now();
+      if (isSupabaseConfigured) {
+        await supabase.auth.signOut();
+      }
+      const elapsed = Date.now() - startMs;
+      if (elapsed < 550) {
+        await new Promise((r) => setTimeout(r, 550 - elapsed));
+      }
       setSession(null);
       setProfile(null);
       if (typeof reasonMessage === 'string' && reasonMessage.trim()) {
         setAuthError(reasonMessage.trim());
+      } else {
+        setAuthError(null);
       }
     } finally {
+      setBufferMessage(null);
       validatingRef.current = false;
     }
   }, []);
+
+  const updatePreferences = useCallback(
+    async ({ theme_preference, notification_prefs }) => {
+      if (theme_preference === 'dark' || theme_preference === 'light') {
+        setDashboardTheme(theme_preference);
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem(THEME_STORAGE_KEY, theme_preference);
+        }
+      }
+      if (notification_prefs) {
+        setNotificationPrefs((prev) => {
+          const next = { ...prev, ...notification_prefs };
+          if (typeof window !== 'undefined') {
+            window.localStorage.setItem(NOTIF_PREFS_STORAGE_KEY, JSON.stringify(next));
+          }
+          return next;
+        });
+      }
+
+      try {
+        const res = await api.patch('/profile/preferences', {
+          ...(theme_preference ? { theme_preference } : {}),
+          ...(notification_prefs ? { notification_prefs } : {}),
+        });
+        if (res?.data?.profile) {
+          setProfile((prev) => ({ ...prev, ...res.data.profile }));
+        }
+      } catch {
+        // Local preference state is already updated
+      }
+    },
+    []
+  );
+
+  const toggleDashboardTheme = useCallback(() => {
+    const next = dashboardTheme === 'dark' ? 'light' : 'dark';
+    updatePreferences({ theme_preference: next });
+  }, [dashboardTheme, updatePreferences]);
 
   const clearAuthError = useCallback(() => {
     setAuthError(null);
   }, []);
 
-  const value = {
-    session,
-    user: session?.user ?? null,
-    profile,
-    role: profile?.role ?? null,
-    loading,
-    authError,
-    setAuthError,
-    clearAuthError,
-    isAuthenticated: Boolean(
-      session &&
-        profile &&
-        profile.is_active !== false &&
-        STAFF_ROLES.includes(profile.role)
-    ),
-    isSupabaseConfigured,
-    signIn,
-    signOut,
-    refreshProfile: async () => {
-      if (!session?.user) return null;
-      const p = await queryUserProfile(session.user);
-      if (p) setProfile(p);
-      return p;
-    },
-  };
+  const role = profile?.role ? String(profile.role).toLowerCase() : null;
+  const isAuthenticated = Boolean(session?.user && profile && role !== ROLES.PATIENT);
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider
+      value={{
+        session,
+        user: session?.user ?? null,
+        profile,
+        role,
+        loading,
+        isAuthenticated,
+        isSupabaseConfigured,
+        authError,
+        bufferMessage,
+        runBuffer,
+        dashboardTheme,
+        isDark: dashboardTheme === 'dark',
+        toggleDashboardTheme,
+        notificationPrefs,
+        updatePreferences,
+        clearAuthError,
+        signIn,
+        signOut,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) {
-    throw new Error('useAuth must be used inside an AuthProvider');
+    throw new Error('useAuth must be used within an AuthProvider');
   }
   return ctx;
 }

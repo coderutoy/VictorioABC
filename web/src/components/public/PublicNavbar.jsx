@@ -11,6 +11,7 @@ import {
   Stethoscope,
   BookOpen,
   LocateFixed,
+  Lock,
 } from 'lucide-react';
 import { useBranch } from '../../context/BranchContext';
 import { formatBranchLabel, formatPhoneDisplay } from '../../config/branches';
@@ -35,9 +36,9 @@ const CLINICAL_GUIDE_ITEMS = [
     icon: Stethoscope,
   },
   {
-    to: '/#clinical-guides',
-    title: 'Dedicated Clinical Guides',
-    subtitle: 'Complete overview of emergency bite care, schedules & protocols',
+    to: '/services',
+    title: 'Clinic Services Overview',
+    subtitle: 'Walk-in PEP, PrEP, ERIG infiltration & PhilHealth ABTP',
     icon: BookOpen,
   },
 ];
@@ -97,17 +98,13 @@ export function PublicNavbar() {
     setBranchDropdownOpen(false);
   };
 
-  const navLinkClass = ({ isActive }) =>
-    `inline-flex min-h-[48px] items-center rounded-xl px-4 py-2 text-sm font-bold whitespace-nowrap transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#118AB2] ${
-      isActive
-        ? 'bg-white/15 text-[#7CD5C7]'
-        : 'text-white/90 hover:bg-white/10 hover:text-[#7CD5C7]'
-    }`;
+  const anchorLinkClass =
+    'inline-flex min-h-[48px] items-center rounded-xl px-3.5 py-2 text-sm font-bold text-white/90 whitespace-nowrap transition hover:bg-white/10 hover:text-[#7CD5C7] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#118AB2]';
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-white/15 bg-[#464B71] text-white shadow-md">
       <div className="flex min-h-[84px] w-full items-center justify-between gap-4 px-4 py-2.5 sm:px-6 lg:min-h-[92px] lg:px-10 xl:px-14">
-        {/* Left Group: Logo + Minimal Borderless Dropdown Trigger Beside Logo + Branch Text Directly Underneath */}
+        {/* Left Group: Logo + Minimal Public "You are in:" Branch Selector */}
         <div className="relative flex shrink-0 flex-col items-start" ref={branchDropdownRef}>
           <div className="flex items-center gap-2 sm:gap-2.5">
             <Link
@@ -131,7 +128,6 @@ export function PublicNavbar() {
               </div>
             </Link>
 
-            {/* Clean, borderless/subtle dropdown trigger directly beside the Victorio ABC Logo */}
             <button
               type="button"
               data-testid="navbar-branch-switcher-trigger"
@@ -149,17 +145,15 @@ export function PublicNavbar() {
             </button>
           </div>
 
-          {/* Active branch name rendered directly underneath the logo as clean, small text */}
           <button
             type="button"
             data-testid="navbar-logo-branch-subtext"
             onClick={() => setBranchDropdownOpen((prev) => !prev)}
             className="mt-1 pl-1 text-left text-[11px] font-medium tracking-wide text-white/80 transition hover:text-[#7CD5C7] focus-visible:outline-none"
           >
-            {branchSubtext}
+            You are in: <span className="font-bold text-[#7CD5C7]">{branchSubtext}</span>
           </button>
 
-          {/* Clean Branch Dropdown Menu (Names Only — No km Distances) */}
           {branchDropdownOpen && (
             <div
               role="menu"
@@ -209,20 +203,28 @@ export function PublicNavbar() {
           )}
         </div>
 
-        {/* Right Group: Well-Spaced Navigation Links + Single Clinical Guides Dropdown */}
+        {/* Right Group: Quick Anchor Links, Clinical Guides Dropdown & Discreet Staff Portal Login Button */}
         <nav
           aria-label="Primary Public Navigation"
-          className="hidden items-center gap-1.5 xl:gap-2.5 lg:flex"
+          className="hidden items-center gap-1 xl:gap-2 lg:flex"
         >
-          <NavLink to="/" end className={navLinkClass}>
-            Home
-          </NavLink>
-
-          <NavLink to="/services" className={navLinkClass}>
+          <a href="/#services" className={anchorLinkClass}>
             Services
-          </NavLink>
+          </a>
 
-          {/* Single "Clinical Guides" Dropdown Menu */}
+          <a href="/#mobile-app-guide" className={anchorLinkClass}>
+            Mobile App Guide
+          </a>
+
+          <a href="/#our-branches" className={anchorLinkClass}>
+            Our Branches
+          </a>
+
+          <a href="/#partners" className={anchorLinkClass}>
+            Partners
+          </a>
+
+          {/* Clinical Guides Dropdown */}
           <div
             className="relative"
             ref={guidesDropdownRef}
@@ -237,7 +239,7 @@ export function PublicNavbar() {
               onKeyDown={(e) => {
                 if (e.key === 'Escape') setGuidesDropdownOpen(false);
               }}
-              className={`inline-flex min-h-[48px] items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-bold whitespace-nowrap transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#118AB2] ${
+              className={`inline-flex min-h-[48px] items-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-bold whitespace-nowrap transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#118AB2] ${
                 isGuideRouteActive || guidesDropdownOpen
                   ? 'bg-white/15 text-[#7CD5C7]'
                   : 'text-white/90 hover:bg-white/10 hover:text-[#7CD5C7]'
@@ -289,17 +291,14 @@ export function PublicNavbar() {
             )}
           </div>
 
-          <NavLink to="/about" className={navLinkClass}>
-            About
-          </NavLink>
-
-          <NavLink to="/faq" className={navLinkClass}>
-            FAQ
-          </NavLink>
-
-          <NavLink to="/contact" className={navLinkClass}>
-            Contact
-          </NavLink>
+          <Link
+            to="/login"
+            data-testid="navbar-staff-login-btn"
+            className="ml-1 inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-[#7CD5C7]/50 bg-white/10 px-4 py-2 text-xs font-extrabold text-[#7CD5C7] whitespace-nowrap transition hover:bg-[#7CD5C7] hover:text-[#464B71] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#118AB2]"
+          >
+            <Lock className="h-3.5 w-3.5" />
+            <span>Staff Portal Login</span>
+          </Link>
         </nav>
 
         {/* Mobile Menu Trigger */}
@@ -318,34 +317,21 @@ export function PublicNavbar() {
       {mobileMenuOpen && (
         <div className="border-t border-white/15 bg-[#343857] px-4 pb-5 pt-3 lg:hidden">
           <nav className="flex flex-col space-y-1">
-            <NavLink
-              to="/"
-              end
-              onClick={() => setMobileMenuOpen(false)}
-              className={({ isActive }) =>
-                `flex min-h-[48px] items-center rounded-xl px-3.5 py-2 text-sm font-bold ${
-                  isActive
-                    ? 'bg-[#118AB2] text-white'
-                    : 'text-white/90 hover:bg-white/10 hover:text-[#7CD5C7]'
-                }`
-              }
-            >
-              Home
-            </NavLink>
-
-            <NavLink
-              to="/services"
-              onClick={() => setMobileMenuOpen(false)}
-              className={({ isActive }) =>
-                `flex min-h-[48px] items-center rounded-xl px-3.5 py-2 text-sm font-bold ${
-                  isActive
-                    ? 'bg-[#118AB2] text-white'
-                    : 'text-white/90 hover:bg-white/10 hover:text-[#7CD5C7]'
-                }`
-              }
-            >
-              Services
-            </NavLink>
+            {[
+              { href: '/#services', label: 'Services' },
+              { href: '/#mobile-app-guide', label: 'Mobile App Guide' },
+              { href: '/#our-branches', label: 'Our Branches' },
+              { href: '/#partners', label: 'Partners' },
+            ].map((item) => (
+              <a
+                key={item.href}
+                href={item.href}
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex min-h-[48px] items-center rounded-xl px-3.5 py-2 text-sm font-bold text-white/90 hover:bg-white/10 hover:text-[#7CD5C7]"
+              >
+                {item.label}
+              </a>
+            ))}
 
             {/* Mobile Expandable Clinical Guides Accordion */}
             <div className="overflow-hidden rounded-xl border border-white/10 bg-[#464B71]/60">
@@ -353,7 +339,7 @@ export function PublicNavbar() {
                 type="button"
                 onClick={() => setMobileGuidesOpen((prev) => !prev)}
                 aria-expanded={mobileGuidesOpen}
-                className="flex min-h-[48px] w-full items-center justify-between px-3.5 py-2 text-left text-sm font-bold text-[#7CD5C7] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#118AB2]"
+                className="flex min-h-[48px] w-full items-center justify-between px-3.5 py-2 text-left text-sm font-bold text-[#7CD5C7]"
               >
                 <span>Clinical Guides</span>
                 <ChevronDown
@@ -395,26 +381,31 @@ export function PublicNavbar() {
                 key={item.to}
                 to={item.to}
                 onClick={() => setMobileMenuOpen(false)}
-                className={({ isActive }) =>
-                  `flex min-h-[48px] items-center rounded-xl px-3.5 py-2 text-sm font-bold ${
-                    isActive
-                      ? 'bg-[#118AB2] text-white'
-                      : 'text-white/90 hover:bg-white/10 hover:text-[#7CD5C7]'
-                  }`
-                }
+                className="flex min-h-[48px] items-center rounded-xl px-3.5 py-2 text-sm font-bold text-white/90 hover:bg-white/10"
               >
                 {item.label}
               </NavLink>
             ))}
+
+            <Link
+              to="/login"
+              onClick={() => setMobileMenuOpen(false)}
+              className="mt-2 flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-[#118AB2] px-4 py-2.5 text-sm font-extrabold text-white"
+            >
+              <Lock className="h-4 w-4" />
+              <span>Staff Portal Login</span>
+            </Link>
           </nav>
 
-          <div className="mt-4">
+          <div className="mt-3">
             <a
               href={`tel:${selectedPublicBranch.contactNumber}`}
               className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl border border-[#7CD5C7] bg-white/10 px-4 py-2.5 text-sm font-bold text-[#7CD5C7]"
             >
               <PhoneCall className="h-4 w-4" />
-              <span>Call {selectedPublicBranch.shortName} ({formattedActivePhone})</span>
+              <span>
+                Call {selectedPublicBranch.shortName} ({formattedActivePhone})
+              </span>
             </a>
           </div>
         </div>

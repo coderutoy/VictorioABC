@@ -23,3 +23,34 @@
     max-width: 100%;
   }
 }
+
+/* High-Contrast Slate-Navy Executive Dark Mode for Dashboard Workspace */
+.dashboard-dark .bg-white,
+.dashboard-dark .bg-white\/95,
+.dashboard-dark .bg-white\/90 {
+  background-color: #1E293B !important;
+  color: #F1F5F9 !important;
+}
+
+.dashboard-dark .bg-\[\#F2F2ED\],
+.dashboard-dark .bg-\[\#F2F2ED\]\/70,
+.dashboard-dark .bg-\[\#F2F2ED\]\/60,
+.dashboard-dark .bg-\[\#F2F2ED\]\/50 {
+  background-color: #0F172A !important;
+  color: #E2E8F0 !important;
+}
+
+.dashboard-dark .border-\[\#DDDCD4\] {
+  border-color: #334155 !important;
+}
+
+.dashboard-dark .text-\[\#464B71\] {
+  color: #F1F5F9 !important;
+}
+
+.dashboard-dark .text-\[\#464B71\]\/80,
+.dashboard-dark .text-\[\#464B71\]\/75,
+.dashboard-dark .text-\[\#464B71\]\/70,
+.dashboard-dark .text-\[\#464B71\]\/60 {
+  color: #94A3B8 !important;
+}

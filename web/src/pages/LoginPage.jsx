@@ -24,6 +24,7 @@ import { useBranch } from '../context/BranchContext';
 import { formatBranchLabel } from '../config/branches';
 import { supabaseConfigWarning } from '../lib/supabase';
 import { PagePetBackground } from '../components/PagePetBackground';
+import { BufferLoader } from '../components/ui/BufferLoader';
 
 const TRUST_HIGHLIGHTS = [
   {
@@ -49,6 +50,7 @@ export function LoginPage() {
     role,
     isSupabaseConfigured,
     authError,
+    bufferMessage,
     clearAuthError,
     signIn,
   } = useAuth();
@@ -137,6 +139,7 @@ export function LoginPage() {
 
   return (
     <div className="relative min-h-screen bg-[#F2F2ED] px-4 py-6 text-[#464B71] sm:px-6 sm:py-10 lg:flex lg:items-center lg:justify-center">
+      {bufferMessage && <BufferLoader message={bufferMessage} />}
       <PagePetBackground />
 
       <div className="relative z-10 mx-auto w-full max-w-5xl space-y-4">

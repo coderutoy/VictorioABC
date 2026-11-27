@@ -25,6 +25,21 @@ import {
   createAdminStaff,
   updateAdminStaff,
 } from './v1.controller.js';
+import {
+  getAdminCommandCenter,
+  executeRebalanceTransfer,
+  getDoctorWorkspace,
+  verifyAiSubmission,
+  submitDoctorDosingSignoff,
+  createAefiReport,
+  getNurseWorkspace,
+  openReconstitutedVial,
+  administerNurseFefoDose,
+  logColdChainTemperature,
+  logDefaulterCall,
+  getLiveNotifications,
+  updateProfilePreferences,
+} from './intelligence.controller.js';
 
 const router = Router();
 
@@ -33,6 +48,24 @@ router.get('/health', getHealth);
 router.post('/auth/login', loginWithBranchLock);
 router.post('/auth/verify-branch', authenticate, verifyBranchSession);
 router.get('/auth/me', authenticate, getAuthMe);
+
+// Phase 2.3 Intelligent Role Workspaces & Notifications
+router.get('/admin/command-center', authenticate, requireAdmin, getAdminCommandCenter);
+router.post('/admin/rebalance-transfer', authenticate, requireAdmin, executeRebalanceTransfer);
+
+router.get('/doctor/workspace', authenticate, getDoctorWorkspace);
+router.post('/doctor/ai-verify', authenticate, verifyAiSubmission);
+router.post('/doctor/dosing-signoff', authenticate, submitDoctorDosingSignoff);
+router.post('/doctor/aefi', authenticate, createAefiReport);
+
+router.get('/nurse/workspace', authenticate, getNurseWorkspace);
+router.post('/nurse/vials/open', authenticate, openReconstitutedVial);
+router.post('/nurse/doses/administer', authenticate, administerNurseFefoDose);
+router.post('/nurse/cold-chain', authenticate, logColdChainTemperature);
+router.post('/nurse/defaulters/call', authenticate, logDefaulterCall);
+
+router.get('/notifications', authenticate, getLiveNotifications);
+router.patch('/profile/preferences', authenticate, updateProfilePreferences);
 
 // Dashboard Summary
 router.get('/dashboard/summary', authenticate, getDashboardSummary);

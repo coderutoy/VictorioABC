@@ -4,7 +4,7 @@ import { DashboardLayout } from './components/dashboard/DashboardLayout';
 import { PublicLayout } from './components/public/PublicLayout';
 import { ProtectedRoute, DashboardRedirect } from './components/routing/ProtectedRoute';
 import { CookieConsentBanner } from './components/CookieConsentBanner';
-import { PublicLandingPage } from './pages/PublicLandingPage';
+import { HomePage } from './pages/HomePage';
 import { AboutPage } from './pages/AboutPage';
 import { ServicesPage } from './pages/ServicesPage';
 import { RoadmapPage } from './pages/RoadmapPage';
@@ -33,9 +33,9 @@ export default function App() {
   return (
     <>
       <Routes>
-        {/* Public-Facing Mobile-Responsive Website with Shared Header, Pet Background & Footer */}
+        {/* Public-Facing Website (Redirects to Role Dashboard while Staff is Logged In) */}
         <Route element={<PublicLayout />}>
-          <Route path="/" element={<PublicLandingPage />} />
+          <Route path="/" element={<HomePage />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/services" element={<ServicesPage />} />
           <Route path="/roadmap" element={<RoadmapPage />} />
@@ -56,10 +56,11 @@ export default function App() {
         <Route path="/mobile-app" element={<Navigate to="/mobile-app-only" replace />} />
         <Route path="/unauthorized" element={<UnauthorizedPage />} />
 
-        {/* Authenticated Clinical Dashboards (staff only) */}
+        {/* Dedicated Staff Workspace (Admin / Doctor / Nurse Only — Zero Public Navbar/Footer) */}
         <Route element={<ProtectedRoute allowedRoles={STAFF_ROLES} />}>
           <Route element={<DashboardLayout />}>
             <Route path="dashboard" element={<DashboardRedirect />} />
+            <Route path="settings" element={<DashboardRedirect />} />
 
             <Route element={<ProtectedRoute allowedRoles={[ROLES.ADMIN]} />}>
               <Route path="dashboard/admin" element={<AdminDashboardPage />} />
@@ -87,7 +88,7 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 
-      {/* Compact, dismissable RA 10173 cookie notice */}
+      {/* Classic RA 10173 Cookie Consent Banner */}
       <CookieConsentBanner />
     </>
   );

@@ -3,6 +3,11 @@ import { supabaseAdmin } from '../../config/supabase.js';
 import { AppError, asyncHandler } from '../../middleware/error.middleware.js';
 import { encryptPatientRecord, decryptPatientRecord } from '../../../utils/encryption.js';
 import { normalizeBranchId } from '../auth/auth.controller.js';
+import {
+  loadEnrichedProfiles,
+  updateEnrichedProfile,
+  appendAuditLog,
+} from './liveStore.js';
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
@@ -925,20 +930,9 @@ export const deleteInventoryBatch = asyncHandler(async (req, res) => {
  */
 export const listAdminStaff = asyncHandler(async (req, res) => {
   const rawBranch = String(req.query?.branch_id || '').trim().toLowerCase();
+  const allProfiles = await loadEnrichedProfiles();
 
-  let query = supabaseAdmin
-    .from('profiles')
-    .select('id, email, full_name, role, branch_id, license_number, is_active, created_at')
-    .in('role', ['admin', 'doctor', 'nurse'])
-    .order('role', { ascending: true })
-    .order('full_name', { ascending: true });
-
-  const { data, error } = await query;
-  if (error) {
-    throw new AppError(`Failed to load staff profiles: ${error.message}`, 500);
-  }
-
-  let list = data || [];
+  let list = allProfiles.filter((s) => ['admin', 'doctor', 'nurse'].includes(s.role));
   if (rawBranch && rawBranch !== 'all') {
     const targetBranch = normalizeBranchId(rawBranch);
     list = list.filter((s) => s.branch_id === targetBranch || s.role === 'admin');
@@ -964,6 +958,8 @@ export const createAdminStaff = asyncHandler(async (req, res) => {
     role = 'nurse',
     branch_id,
     license_number = null,
+    prc_license_number = null,
+    prc_expiry_date = '2028-06-30',
   } = req.body || {};
 
   if (!email || !full_name) {
@@ -979,11 +975,16 @@ export const createAdminStaff = asyncHandler(async (req, res) => {
       ? normalizeBranchId(branch_id) || null
       : normalizeBranchId(branch_id) || 'santa-maria';
 
+  const resolvedPrc = prc_license_number || license_number || null;
+
   const userMetadata = {
     role: normalizedRole,
     full_name: String(full_name).trim(),
     branch_id: resolvedBranchId,
-    license_number: license_number || null,
+    license_number: resolvedPrc,
+    prc_license_number: resolvedPrc,
+    prc_expiry_date: prc_expiry_date || '2028-06-30',
+    theme_preference: 'light',
     is_active: true,
   };
 
@@ -998,7 +999,7 @@ export const createAdminStaff = asyncHandler(async (req, res) => {
     throw new AppError(`Failed to create staff auth account: ${authErr.message}`, 400);
   }
 
-  const { data: profileRow, error: profErr } = await supabaseAdmin
+  const { error: profErr } = await supabaseAdmin
     .from('profiles')
     .upsert(
       {
@@ -1007,23 +1008,36 @@ export const createAdminStaff = asyncHandler(async (req, res) => {
         full_name: String(full_name).trim(),
         role: normalizedRole,
         branch_id: resolvedBranchId,
-        license_number: license_number || null,
+        license_number: resolvedPrc,
         is_active: true,
       },
       { onConflict: 'id' }
-    )
-    .select('*')
-    .single();
+    );
 
   if (profErr) {
     throw new AppError(`Failed to save staff profile: ${profErr.message}`, 500);
   }
 
+  const enriched = await updateEnrichedProfile(createdAuth.user.id, {
+    prc_license_number: resolvedPrc,
+    prc_expiry_date: prc_expiry_date || '2028-06-30',
+  });
+
+  await appendAuditLog({
+    branch_id: resolvedBranchId,
+    actor_id: req.user?.id || null,
+    actor_name: `${req.user?.full_name || 'Super Admin'}`,
+    action_type: 'STAFF_CREDENTIAL_PROVISIONED',
+    entity_type: 'profiles',
+    reason: `Provisioned ${normalizedRole.toUpperCase()} account for ${full_name} (${resolvedPrc || 'No PRC'}) assigned to ${resolvedBranchId || 'All Branches'}.`,
+    metadata: { email, role: normalizedRole, branch_id: resolvedBranchId, prc_license_number: resolvedPrc },
+  });
+
   res.status(201).json({
     ok: true,
     success: true,
-    staff: profileRow,
-    data: profileRow,
+    staff: enriched,
+    data: enriched,
   });
 });
 
@@ -1032,7 +1046,15 @@ export const createAdminStaff = asyncHandler(async (req, res) => {
  */
 export const updateAdminStaff = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { full_name, role, branch_id, license_number, is_active } = req.body || {};
+  const {
+    full_name,
+    role,
+    branch_id,
+    license_number,
+    prc_license_number,
+    prc_expiry_date,
+    is_active,
+  } = req.body || {};
 
   const { data: existing, error: findErr } = await supabaseAdmin
     .from('profiles')
@@ -1059,34 +1081,31 @@ export const updateAdminStaff = asyncHandler(async (req, res) => {
     nextBranchId = null;
   }
 
-  const updates = {
+  const nextPrc =
+    prc_license_number !== undefined
+      ? prc_license_number || null
+      : license_number !== undefined
+        ? license_number || null
+        : existing.license_number;
+
+  const updatedProfile = await updateEnrichedProfile(id, {
     full_name: full_name !== undefined ? String(full_name).trim() : existing.full_name,
     role: nextRole,
     branch_id: nextBranchId,
-    license_number:
-      license_number !== undefined ? license_number || null : existing.license_number,
+    license_number: nextPrc,
+    prc_license_number: nextPrc,
+    ...(prc_expiry_date !== undefined ? { prc_expiry_date } : {}),
     is_active: is_active !== undefined ? Boolean(is_active) : existing.is_active,
-  };
+  });
 
-  const { data: updatedProfile, error: updErr } = await supabaseAdmin
-    .from('profiles')
-    .update(updates)
-    .eq('id', id)
-    .select('*')
-    .single();
-
-  if (updErr) {
-    throw new AppError(`Failed to update staff profile: ${updErr.message}`, 500);
-  }
-
-  await supabaseAdmin.auth.admin.updateUserById(id, {
-    user_metadata: {
-      role: updatedProfile.role,
-      full_name: updatedProfile.full_name,
-      branch_id: updatedProfile.branch_id,
-      license_number: updatedProfile.license_number,
-      is_active: updatedProfile.is_active,
-    },
+  await appendAuditLog({
+    branch_id: nextBranchId,
+    actor_id: req.user?.id || null,
+    actor_name: `${req.user?.full_name || 'Super Admin'}`,
+    action_type: 'STAFF_GOVERNANCE_UPDATED',
+    entity_type: 'profiles',
+    reason: `Updated staff governance for ${updatedProfile.full_name} (${updatedProfile.role.toUpperCase()} • ${nextBranchId || 'Global'} • PRC: ${nextPrc || 'N/A'} • Active: ${updatedProfile.is_active}).`,
+    metadata: { staff_id: id, branch_id: nextBranchId, prc_license_number: nextPrc, is_active: updatedProfile.is_active },
   });
 
   res.status(200).json({

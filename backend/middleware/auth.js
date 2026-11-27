@@ -30,7 +30,7 @@ export const authenticate = asyncHandler(async (req, res, next) => {
 
   const { data: profile } = await supabaseAdmin
     .from('profiles')
-    .select('id, branch_id, role, full_name, email, license_number, is_active, created_at')
+    .select('*')
     .eq('id', user.id)
     .maybeSingle();
 
@@ -43,13 +43,30 @@ export const authenticate = asyncHandler(async (req, res, next) => {
       ? normalizeBranchId(rawBranchId) || null
       : normalizeBranchId(rawBranchId);
 
+  const prcLicense =
+    profile?.prc_license_number ||
+    meta.prc_license_number ||
+    profile?.license_number ||
+    meta.license_number ||
+    null;
+
   const resolvedProfile = {
     id: user.id,
     branch_id: assignedBranchId,
     role,
     full_name: profile?.full_name || meta.full_name || user.email || 'Victorio ABC User',
     email: profile?.email || user.email || null,
-    license_number: profile?.license_number || meta.license_number || null,
+    license_number: prcLicense,
+    prc_license_number: prcLicense,
+    prc_expiry_date: profile?.prc_expiry_date || meta.prc_expiry_date || '2028-06-30',
+    theme_preference: profile?.theme_preference || meta.theme_preference || 'light',
+    notification_prefs: profile?.notification_prefs ||
+      meta.notification_prefs || {
+        critical_clinical: true,
+        cold_chain: true,
+        inventory_alerts: true,
+        sound_alerts: false,
+      },
     is_active: profile ? profile.is_active !== false : meta.is_active !== false,
   };
 
