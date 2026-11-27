@@ -186,8 +186,27 @@ const BRANCH_DEFINITIONS = [
   },
 ];
 
+/**
+ * Formats a concise "… Branch" label for display directly beneath the Victorio ABC logo
+ * (e.g. "Santa Maria Branch", "Baliwag Branch", "Cefels, Caloocan Branch").
+ */
+export function formatBranchLabel(branch) {
+  if (!branch) return 'Santa Maria Branch';
+  const map = {
+    baliwag: 'Baliwag Branch',
+    'santa-maria': 'Santa Maria Branch',
+    pandi: 'Mapulang Lupa, Pandi Branch',
+    drt: 'DRT Branch',
+    'meycauayan-camalig': 'Camalig, Meycauayan Branch',
+    'meycauayan-poblacion': 'Calvario, Meycauayan Branch',
+    'cefels-caloocan': 'Cefels, Caloocan Branch',
+  };
+  return map[branch.slug] || `${branch.area || branch.shortName} Branch`;
+}
+
 export const OFFICIAL_BRANCHES = BRANCH_DEFINITIONS.map((branch) => ({
   ...branch,
+  branchLabel: formatBranchLabel(branch),
   mapsUrl: buildMapsUrl(branch.mapsQuery),
   hours: 'Open Daily • Walk-In & Follow-Up PEP Doses',
   apiBaseUrl: DEFAULT_API_BASE_URL,

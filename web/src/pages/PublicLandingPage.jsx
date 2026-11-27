@@ -80,7 +80,7 @@ const CLINIC_HIGHLIGHTS = [
 
 export function PublicLandingPage() {
   const { isAuthenticated } = useAuth();
-  const { selectedPublicBranch, selectedBranchDistanceKm } = useBranch();
+  const { selectedPublicBranch } = useBranch();
 
   const portalPath = isAuthenticated ? '/dashboard' : '/login';
 
@@ -161,7 +161,7 @@ export function PublicLandingPage() {
                     />
                     <div className="min-w-0">
                       <span className="block text-[10px] font-extrabold uppercase tracking-wider text-[#118AB2]">
-                        You are in:
+                        Featured Clinic Branch
                       </span>
                       <h2 className="truncate text-base font-extrabold text-[#464B71]">
                         {selectedPublicBranch.shortName}
@@ -169,14 +169,10 @@ export function PublicLandingPage() {
                     </div>
                   </div>
 
-                  {/* Calm, Non-Interactive Nearest / Distance Status Pill */}
+                  {/* Calm, Non-Interactive Nearest Status Pill (no km display) */}
                   <span className="pointer-events-none select-none inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[#7CD5C7]/25 px-3 py-1 text-xs font-bold text-[#2E5E59]">
                     <span className="h-2 w-2 rounded-full bg-[#1E6B60]" />
-                    <span>
-                      {selectedBranchDistanceKm !== null
-                        ? `${selectedBranchDistanceKm} km away`
-                        : 'Nearest'}
-                    </span>
+                    <span>Nearest</span>
                   </span>
                 </div>
 

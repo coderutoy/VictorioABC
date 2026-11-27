@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { useAuth } from './AuthContext';
+import { useAuth, ROLES } from './AuthContext';
 import {
   OFFICIAL_BRANCHES,
   DEFAULT_BRANCH_SLUG,
@@ -37,7 +38,9 @@ function resolveInitialBranchState() {
 }
 
 export function BranchProvider({ children }) {
-  const { profile, isAuthenticated } = useAuth();
+  const { profile, role, isAuthenticated, signOut } = useAuth();
+  const navigate = useNavigate();
+
   const [branches, setBranches] = useState(OFFICIAL_BRANCHES);
   const [initialState] = useState(resolveInitialBranchState);
   const [selectedBranchSlug, setSelectedBranchSlugState] = useState(initialState.slug);
@@ -46,32 +49,59 @@ export function BranchProvider({ children }) {
   );
   const [loadingBranches, setLoadingBranches] = useState(false);
 
-  // Geolocation state
+  // Geolocation state (preserved for automatic nearest-branch detection without displaying km in UI)
   const [geolocationStatus, setGeolocationStatus] = useState('idle');
   const [nearestBranchSlug, setNearestBranchSlug] = useState(null);
-  const [distancesBySlug, setDistancesBySlug] = useState({});
 
-  const persistBranchSlug = useCallback((slug, markManual = false) => {
-    const matched = getBranchBySlug(slug);
-    setSelectedBranchSlugState(matched.slug);
-    if (markManual) {
-      setHasManualSelection(true);
-    }
-
-    if (typeof window !== 'undefined') {
-      try {
-        window.localStorage.setItem(BRANCH_STORAGE_KEY, matched.slug);
-        if (markManual) {
-          window.sessionStorage.setItem(BRANCH_MANUAL_OVERRIDE_KEY, 'true');
-        }
-        const url = new URL(window.location.href);
-        url.searchParams.set('branch', matched.slug);
-        window.history.replaceState({}, '', url.toString());
-      } catch {
-        // Ignore URL/storage errors
+  const enforceBranchSwitchSessionRule = useCallback(
+    async (nextBranchSlug) => {
+      if (!isAuthenticated || !profile) return;
+      const isBranchBoundStaff = role === ROLES.DOCTOR || role === ROLES.NURSE;
+      if (isBranchBoundStaff && profile.branch_id && profile.branch_id !== nextBranchSlug) {
+        await signOut();
+        navigate('/login', { replace: true });
       }
+    },
+    [isAuthenticated, profile, role, signOut, navigate]
+  );
+
+  const persistBranchSlug = useCallback(
+    (slug, markManual = false) => {
+      const matched = getBranchBySlug(slug);
+      setSelectedBranchSlugState(matched.slug);
+      if (markManual) {
+        setHasManualSelection(true);
+      }
+
+      if (typeof window !== 'undefined') {
+        try {
+          window.localStorage.setItem(BRANCH_STORAGE_KEY, matched.slug);
+          if (markManual) {
+            window.sessionStorage.setItem(BRANCH_MANUAL_OVERRIDE_KEY, 'true');
+          }
+          const url = new URL(window.location.href);
+          url.searchParams.set('branch', matched.slug);
+          window.history.replaceState({}, '', url.toString());
+        } catch {
+          // Ignore URL/storage errors
+        }
+      }
+
+      enforceBranchSwitchSessionRule(matched.slug);
+    },
+    [enforceBranchSwitchSessionRule]
+  );
+
+  // Also guard reactively whenever selectedBranchSlug or profile changes (e.g., popstate or storage sync)
+  useEffect(() => {
+    if (!isAuthenticated || !profile) return;
+    const isBranchBoundStaff = role === ROLES.DOCTOR || role === ROLES.NURSE;
+    if (isBranchBoundStaff && profile.branch_id && profile.branch_id !== selectedBranchSlug) {
+      signOut().then(() => {
+        navigate('/login', { replace: true });
+      });
     }
-  }, []);
+  }, [isAuthenticated, profile, role, selectedBranchSlug, signOut, navigate]);
 
   const setSelectedBranchSlug = useCallback(
     (slugOrId) => {
@@ -94,7 +124,6 @@ export function BranchProvider({ children }) {
           const result = findNearestOfficialBranch(latitude, longitude);
           if (result?.branch) {
             setNearestBranchSlug(result.branch.slug);
-            setDistancesBySlug(result.distancesBySlug || {});
             setGeolocationStatus('detected');
             if (autoSelect) {
               persistBranchSlug(result.branch.slug, false);
@@ -134,7 +163,6 @@ export function BranchProvider({ children }) {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  // Load branches from public.branches table in Supabase and enrich with official config metadata
   useEffect(() => {
     let active = true;
 
@@ -191,28 +219,18 @@ export function BranchProvider({ children }) {
     [selectedBranchSlug]
   );
 
-  const selectedBranchDistanceKm = useMemo(() => {
-    const dist = distancesBySlug[selectedPublicBranch.slug];
-    return typeof dist === 'number' ? dist : null;
-  }, [distancesBySlug, selectedPublicBranch.slug]);
+  // Active branch across the entire site & dashboards is always the selected branch in BranchContext.
+  // Admin can switch branches freely and reload data for any branch; doctor/nurse are immediately signed out if mismatched.
+  const activeBranchId = selectedPublicBranch.id;
+  const activeBranch = selectedPublicBranch;
 
-  const assignedBranchSlug = profile?.branch_id
-    ? getBranchBySlug(profile.branch_id).slug
-    : null;
-
-  const activeBranchId = isAuthenticated
-    ? assignedBranchSlug || selectedPublicBranch.id
-    : selectedPublicBranch.id;
-
-  const activeBranch = useMemo(
-    () => getBranchBySlug(activeBranchId),
-    [activeBranchId]
+  const setActiveBranchId = useCallback(
+    (branchIdOrSlug) => {
+      if (!branchIdOrSlug) return;
+      setSelectedBranchSlug(branchIdOrSlug);
+    },
+    [setSelectedBranchSlug]
   );
-
-  const setActiveBranchId = (branchIdOrSlug) => {
-    if (!branchIdOrSlug) return;
-    setSelectedBranchSlug(branchIdOrSlug);
-  };
 
   const value = {
     branches,
@@ -222,13 +240,11 @@ export function BranchProvider({ children }) {
     setSelectedBranchSlug,
     activeBranchId,
     activeBranch,
-    canSwitchBranch: !isAuthenticated,
+    canSwitchBranch: true,
     loadingBranches,
     setActiveBranchId,
     geolocationStatus,
     nearestBranchSlug,
-    distancesBySlug,
-    selectedBranchDistanceKm,
     isNearestBranchSelected:
       Boolean(nearestBranchSlug) && nearestBranchSlug === selectedPublicBranch.slug,
     detectNearestBranch: () => detectNearestBranch({ autoSelect: true }),

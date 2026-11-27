@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { NavLink, Link, Outlet, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -14,9 +14,13 @@ import {
   Menu,
   X,
   LogOut,
+  ChevronDown,
+  Check,
+  LocateFixed,
 } from 'lucide-react';
 import { useAuth, ROLES } from '../../context/AuthContext';
 import { useBranch } from '../../context/BranchContext';
+import { formatBranchLabel } from '../../config/branches';
 
 const NAV_BY_ROLE = {
   [ROLES.ADMIN]: [
@@ -50,17 +54,44 @@ const ROLE_BADGE = {
 };
 
 /**
- * Shared clinical dashboard shell: collapsible slide-over sidebar on < lg, top bar with
- * user name, role badge, active branch and Sign Out.
+ * Shared clinical dashboard shell:
+ * - Minimal logo-adjacent branch dropdown trigger directly beside the Victorio ABC logo
+ *   with active branch text underneath (e.g., "Santa Maria Branch").
+ * - Selecting another branch as Admin dynamically reloads branch data; selecting another
+ *   branch as Doctor/Nurse immediately terminates the session and redirects to /login.
  */
 export function DashboardLayout() {
   const { profile, role, signOut } = useAuth();
-  const { branches, activeBranchId, activeBranch, canSwitchBranch, setActiveBranchId } = useBranch();
+  const {
+    publicBranches,
+    selectedPublicBranch,
+    setSelectedBranchSlug,
+    detectNearestBranch,
+  } = useBranch();
   const navigate = useNavigate();
+
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [branchMenuOpen, setBranchMenuOpen] = useState(false);
+  const branchMenuRef = useRef(null);
 
   const navItems = NAV_BY_ROLE[role] || [];
-  const branchName = activeBranch?.name || (canSwitchBranch ? 'All Branches (HQ View)' : 'Assigned Branch');
+  const branchSubtext =
+    selectedPublicBranch?.branchLabel || formatBranchLabel(selectedPublicBranch);
+
+  useEffect(() => {
+    function handleOutside(e) {
+      if (branchMenuRef.current && !branchMenuRef.current.contains(e.target)) {
+        setBranchMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, []);
+
+  const handleSelectBranch = (slug) => {
+    setSelectedBranchSlug(slug);
+    setBranchMenuOpen(false);
+  };
 
   const handleSignOut = async () => {
     await signOut();
@@ -83,26 +114,107 @@ export function DashboardLayout() {
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="flex h-16 shrink-0 items-center justify-between border-b border-white/15 px-4">
-          <Link to="/" className="flex items-center gap-2.5">
-            <img
-              src="/victorio_logo.jpg"
-              alt="Victorio ABC Logo"
-              className="h-10 w-10 rounded-full border-2 border-[#7CD5C7] bg-white object-cover"
-            />
-            <div>
-              <p className="text-sm font-bold leading-tight">Victorio ABC</p>
-              <p className="text-[11px] font-medium capitalize text-[#7CD5C7]">{role} workspace</p>
+        {/* Logo + Borderless Branch Dropdown Trigger Beside Logo + Branch Name Text Underneath */}
+        <div
+          ref={branchMenuRef}
+          className="relative flex shrink-0 flex-col border-b border-white/15 px-4 py-3"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Link to="/" className="flex items-center gap-2.5">
+                <img
+                  src="/victorio_logo.jpg"
+                  alt="Victorio ABC Logo"
+                  className="h-10 w-10 rounded-full border-2 border-[#7CD5C7] bg-white object-cover"
+                />
+                <div>
+                  <p className="text-sm font-extrabold leading-tight text-white">
+                    Victorio ABC
+                  </p>
+                  <p className="text-[11px] font-semibold capitalize text-[#7CD5C7]">
+                    {role} workspace
+                  </p>
+                </div>
+              </Link>
+
+              <button
+                type="button"
+                data-testid="dashboard-branch-switcher-trigger"
+                onClick={() => setBranchMenuOpen((prev) => !prev)}
+                aria-haspopup="menu"
+                aria-expanded={branchMenuOpen}
+                aria-label={`Switch branch (current: ${branchSubtext})`}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[#7CD5C7] transition hover:bg-white/10 hover:text-white"
+              >
+                <ChevronDown
+                  className={`h-4 w-4 transition-transform ${
+                    branchMenuOpen ? 'rotate-180' : ''
+                  }`}
+                />
+              </button>
             </div>
-          </Link>
+
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(false)}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-white/80 hover:bg-white/10 lg:hidden"
+              aria-label="Close navigation"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
           <button
             type="button"
-            onClick={() => setSidebarOpen(false)}
-            className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-white/80 hover:bg-white/10 lg:hidden"
-            aria-label="Close navigation"
+            data-testid="dashboard-logo-branch-subtext"
+            onClick={() => setBranchMenuOpen((prev) => !prev)}
+            className="mt-1 pl-0.5 text-left text-[11px] font-medium text-white/80 transition hover:text-[#7CD5C7]"
           >
-            <X className="h-5 w-5" />
+            {branchSubtext}
           </button>
+
+          {branchMenuOpen && (
+            <div
+              role="menu"
+              aria-label="Select Clinic Branch"
+              className="absolute left-3 top-full z-50 mt-1.5 w-60 rounded-2xl border border-[#DDDCD4] bg-white p-1.5 text-[#464B71] shadow-2xl"
+            >
+              <div className="max-h-64 space-y-0.5 overflow-y-auto">
+                {publicBranches.map((branch) => {
+                  const isSelected = branch.slug === selectedPublicBranch.slug;
+                  return (
+                    <button
+                      key={branch.slug}
+                      type="button"
+                      role="menuitem"
+                      onClick={() => handleSelectBranch(branch.slug)}
+                      className={`flex min-h-[40px] w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-left text-xs font-bold transition ${
+                        isSelected
+                          ? 'bg-[#7CD5C7]/25 font-extrabold text-[#464B71]'
+                          : 'text-[#464B71]/90 hover:bg-[#F2F2ED]'
+                      }`}
+                    >
+                      <span className="truncate">{branch.shortName}</span>
+                      {isSelected && <Check className="h-4 w-4 shrink-0 text-[#118AB2]" />}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="mt-1 border-t border-[#F2F2ED] pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    detectNearestBranch();
+                    setBranchMenuOpen(false);
+                  }}
+                  className="flex min-h-[36px] w-full items-center justify-center gap-1.5 rounded-xl px-3 py-1.5 text-[11px] font-bold text-[#118AB2] hover:bg-[#EAFBF8]"
+                >
+                  <LocateFixed className="h-3.5 w-3.5" />
+                  <span>Detect nearest branch</span>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
@@ -148,26 +260,9 @@ export function DashboardLayout() {
               <Menu className="h-5 w-5" />
             </button>
 
-            {canSwitchBranch ? (
-              <select
-                aria-label="Select branch scope"
-                value={activeBranchId || ''}
-                onChange={(e) => setActiveBranchId(e.target.value)}
-                className="min-h-[44px] max-w-[11rem] rounded-xl border border-[#DDDCD4] bg-white px-2.5 py-1.5 text-xs font-bold text-[#464B71] focus:border-[#118AB2] focus:outline-none focus:ring-2 focus:ring-[#7CD5C7]/50 sm:max-w-xs"
-              >
-                <option value="">All Branches (HQ View)</option>
-                {branches.map((branch) => (
-                  <option key={branch.id} value={branch.id}>
-                    {branch.shortName || branch.name}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <span className="inline-flex min-w-0 items-center gap-1.5 text-xs font-extrabold text-[#464B71] sm:text-sm">
-                <Building2 className="h-4 w-4 shrink-0 text-[#118AB2]" />
-                <span className="truncate">{branchName}</span>
-              </span>
-            )}
+            <span className="text-xs font-extrabold text-[#464B71] sm:text-sm">
+              {branchSubtext}
+            </span>
           </div>
 
           <div className="flex items-center gap-2.5">

@@ -8,7 +8,6 @@ import {
   Eye,
   EyeOff,
   ArrowLeft,
-  MapPin,
   Building2,
   Stethoscope,
   AlertCircle,
@@ -16,9 +15,9 @@ import {
   HelpCircle,
 } from 'lucide-react';
 import { useAuth, ROLES, getRoleHome } from '../context/AuthContext';
-import { supabaseConfigWarning } from '../lib/supabase';
 import { useBranch } from '../context/BranchContext';
-import { formatPhoneDisplay } from '../config/branches';
+import { formatBranchLabel } from '../config/branches';
+import { supabaseConfigWarning } from '../lib/supabase';
 import { PagePetBackground } from '../components/PagePetBackground';
 
 const TRUST_HIGHLIGHTS = [
@@ -41,8 +40,9 @@ const TRUST_HIGHLIGHTS = [
 
 export function LoginPage() {
   const { isAuthenticated, role, isSupabaseConfigured, signIn } = useAuth();
-  const { selectedPublicBranch, selectedBranchDistanceKm } = useBranch();
+  const { selectedPublicBranch } = useBranch();
   const navigate = useNavigate();
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -53,6 +53,9 @@ export function LoginPage() {
   if (isAuthenticated) {
     return <Navigate to={getRoleHome(role)} replace />;
   }
+
+  const branchSubtext =
+    selectedPublicBranch?.branchLabel || formatBranchLabel(selectedPublicBranch);
 
   const validateFields = () => {
     const nextErrors = { email: '', password: '' };
@@ -94,10 +97,6 @@ export function LoginPage() {
     }
   };
 
-  const formattedBranchPhone =
-    selectedPublicBranch.displayPhone ||
-    formatPhoneDisplay(selectedPublicBranch.contactNumber);
-
   return (
     <div className="relative min-h-screen bg-[#F2F2ED] px-4 py-6 text-[#464B71] sm:px-6 sm:py-10 lg:flex lg:items-center lg:justify-center">
       {/* Subtle Dogs & Cats Background Design Behind the Login Layout */}
@@ -123,21 +122,21 @@ export function LoginPage() {
           </Link>
         </div>
 
-        {/* Mobile Compact Branded Header Banner (< lg) */}
+        {/* Mobile Compact Branded Header (< lg): Logo + Subtle Branch Plain Text Underneath */}
         <div className="rounded-2xl bg-[#464B71] p-4 text-white shadow-md lg:hidden">
-          <div className="flex items-center gap-3">
-            <img
-              src="/victorio_logo.jpg"
-              alt="Victorio Animal Bite Center Logo"
-              className="h-12 w-12 shrink-0 rounded-full border-2 border-[#7CD5C7] bg-white object-cover"
-            />
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-extrabold text-white">
-                Victorio Animal Bite Center
-              </p>
-              <p className="text-xs font-semibold text-[#7CD5C7]">
-                Sign In &bull; You are in: {selectedPublicBranch.shortName}
-              </p>
+          <div className="flex flex-col items-start gap-1.5">
+            <div className="flex items-center gap-3">
+              <img
+                src="/victorio_logo.jpg"
+                alt="Victorio Animal Bite Center Logo"
+                className="h-12 w-12 shrink-0 rounded-full border-2 border-[#7CD5C7] bg-white object-cover"
+              />
+              <div className="min-w-0">
+                <p className="text-sm font-extrabold text-white">
+                  Victorio Animal Bite Center
+                </p>
+                <p className="text-xs font-medium text-white/75">{branchSubtext}</p>
+              </div>
             </div>
           </div>
         </div>
@@ -146,7 +145,6 @@ export function LoginPage() {
         <div className="overflow-hidden rounded-3xl border border-[#DDDCD4] bg-white/95 shadow-xl backdrop-blur-xs lg:grid lg:grid-cols-12">
           {/* Left Brand & Trust Panel (Desktop lg+) */}
           <div className="relative hidden overflow-hidden bg-[#464B71] p-8 text-white lg:col-span-5 lg:flex lg:flex-col lg:justify-between xl:p-10">
-            {/* Subtle Decorative Pet Pattern Silhouette at Low Opacity */}
             <div
               aria-hidden="true"
               className="pointer-events-none select-none absolute inset-0 opacity-15"
@@ -157,51 +155,32 @@ export function LoginPage() {
             />
 
             <div className="relative z-10 space-y-6">
-              <div className="flex items-center gap-3.5">
-                <div className="h-16 w-16 shrink-0 rounded-full border-2 border-[#7CD5C7] bg-white p-0.5 shadow-md">
-                  <img
-                    src="/victorio_logo.jpg"
-                    alt="Victorio Animal Bite Center Logo"
-                    className="h-full w-full rounded-full object-cover"
-                  />
+              {/* Victorio ABC Logo with ONLY the current branch name in clean, subtle plain text underneath */}
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-3.5">
+                  <div className="h-16 w-16 shrink-0 rounded-full border-2 border-[#7CD5C7] bg-white p-0.5 shadow-md">
+                    <img
+                      src="/victorio_logo.jpg"
+                      alt="Victorio Animal Bite Center Logo"
+                      className="h-full w-full rounded-full object-cover"
+                    />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-extrabold leading-tight text-white">
+                      Victorio Animal Bite Center
+                    </h2>
+                    <p
+                      data-testid="login-branch-subtext"
+                      className="mt-0.5 text-xs font-medium text-white/75"
+                    >
+                      {branchSubtext}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <span className="inline-block rounded-full bg-[#7CD5C7]/25 px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-[#7CD5C7]">
-                    7-Branch Network
-                  </span>
-                  <h2 className="mt-1 text-xl font-extrabold leading-tight text-white">
-                    Victorio Animal Bite Center
-                  </h2>
-                  <p className="text-xs font-semibold text-[#7CD5C7]">
-                    Sign In
-                  </p>
-                </div>
-              </div>
-
-              {/* Active Branch Context (Read-Only from Geolocation / BranchContext) */}
-              <div className="space-y-2 rounded-2xl border border-white/15 bg-[#343857]/90 p-4">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="inline-flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wider text-[#7CD5C7]">
-                    <MapPin className="h-3.5 w-3.5" />
-                    <span>You are in:</span>
-                  </span>
-                  {selectedBranchDistanceKm !== null && (
-                    <span className="rounded-full bg-[#7CD5C7]/25 px-2 py-0.5 text-[10px] font-bold text-[#7CD5C7]">
-                      {selectedBranchDistanceKm} km away
-                    </span>
-                  )}
-                </div>
-                <p className="text-sm font-extrabold text-white">
-                  {selectedPublicBranch.shortName}
-                </p>
-                <p className="text-xs text-white/80">{selectedPublicBranch.address}</p>
-                <p className="text-xs font-bold text-[#7CD5C7]">
-                  Hotline: {formattedBranchPhone}
-                </p>
               </div>
 
               {/* 3 Concise Trust Highlights */}
-              <div className="space-y-3.5 pt-1">
+              <div className="space-y-3.5 pt-2">
                 {TRUST_HIGHLIGHTS.map(({ icon: Icon, title, detail }) => (
                   <div key={title} className="flex items-start gap-3">
                     <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 text-[#7CD5C7]">
@@ -223,25 +202,14 @@ export function LoginPage() {
             </div>
           </div>
 
-          {/* Right Authentication Card (No manual branch selector dropdown) */}
+          {/* Right Authentication Card (No branch banners/badges/pills or location callouts) */}
           <div className="p-6 sm:p-8 lg:col-span-7 xl:p-10">
-            <div className="space-y-1.5">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#7CD5C7]/30 px-3 py-0.5 text-xs font-extrabold text-[#464B71]">
-                  <Lock className="h-3.5 w-3.5 text-[#118AB2]" />
-                  <span>Victorio Animal Bite Center</span>
-                </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#F2F2ED] px-3 py-1 text-xs font-extrabold text-[#464B71] ring-1 ring-[#DDDCD4]">
-                  <MapPin className="h-3.5 w-3.5 text-[#118AB2]" />
-                  <span>You are in: {selectedPublicBranch.shortName}</span>
-                </span>
-              </div>
-              <h1 className="pt-1 text-2xl font-extrabold text-[#464B71] sm:text-3xl">
+            <div className="space-y-1">
+              <h1 className="text-2xl font-extrabold text-[#464B71] sm:text-3xl">
                 Sign In
               </h1>
-              <p className="text-xs text-[#464B71]/80 sm:text-sm">
-                Enter your account credentials to sign in at{' '}
-                <strong className="text-[#464B71]">{selectedPublicBranch.shortName}</strong>.
+              <p className="text-xs text-[#464B71]/75 sm:text-sm">
+                Enter your account credentials to continue.
               </p>
             </div>
 
@@ -385,9 +353,9 @@ export function LoginPage() {
                     to="/contact"
                     className="font-extrabold text-[#118AB2] underline hover:text-[#0D6E8E]"
                   >
-                    Contact your nearest Victorio branch
-                  </Link>{' '}
-                  ({selectedPublicBranch.shortName}: {formattedBranchPhone}).
+                    View clinic contact directory
+                  </Link>
+                  .
                 </span>
               </div>
               <p className="text-[11px] text-[#464B71]/70">

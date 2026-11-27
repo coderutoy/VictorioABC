@@ -3,12 +3,8 @@ import { supabaseAdmin, supabaseUrl, supabaseAnonKey } from '../../config/supaba
 import { AppError, asyncHandler } from '../../middleware/error.middleware.js';
 
 export const CROSS_BRANCH_DENIED_MESSAGE =
-  'Access denied: Your account is assigned to a different branch and cannot sign in from this branch location.';
+  'This account is not assigned to this branch. Please switch to your assigned branch and try again.';
 
-/**
- * Canonical 7-branch lookup table matching web/src/config/branches.js and supabase/migrations/20261127_core_clinical_tables.sql.
- * Maps both branch slugs and legacy UUIDs to canonical branch slug IDs.
- */
 export const OFFICIAL_BRANCH_SLUGS = Object.freeze([
   'baliwag',
   'santa-maria',
@@ -75,8 +71,8 @@ export function resolveAssignedBranchId(rawBranchValue) {
 
 /**
  * Checks whether a user profile is permitted to sign in from the active client branch.
- * - All branch-assigned accounts (admin, doctor, nurse) must match activeBranchId.
- * - Throws HTTP 403 Forbidden if the account belongs to a different branch.
+ * - `admin` & `patient`: Unrestricted (branch_id may be NULL); can log in from ANY branch.
+ * - `doctor` & `nurse` : Strictly tied to their assigned `branch_id` in `profiles`.
  */
 export function assertBranchLoginAllowed(profile, activeBranchId) {
   if (!profile) {
@@ -84,21 +80,19 @@ export function assertBranchLoginAllowed(profile, activeBranchId) {
   }
 
   const role = String(profile.role || 'patient').toLowerCase();
-  const assignedBranchId = normalizeBranchId(profile.branch_id);
-  const clientBranchId = normalizeBranchId(activeBranchId);
 
-  const isSuperAdmin = Boolean(profile.super_admin);
-  const isStaff = role === 'doctor' || role === 'nurse' || (role === 'admin' && !isSuperAdmin);
+  // Global access for admin and patient accounts across all branches
+  if (role === 'admin' || role === 'patient') {
+    return;
+  }
 
-  if (isStaff) {
-    if (assignedBranchId && clientBranchId && assignedBranchId !== clientBranchId) {
+  // Strict branch lock for doctor and nurse accounts
+  if (role === 'doctor' || role === 'nurse') {
+    const assignedBranchId = normalizeBranchId(profile.branch_id);
+    const clientBranchId = normalizeBranchId(activeBranchId);
+    if (!assignedBranchId || !clientBranchId || assignedBranchId !== clientBranchId) {
       throw new AppError(CROSS_BRANCH_DENIED_MESSAGE, 403);
     }
-    if ((role === 'doctor' || role === 'nurse') && (!assignedBranchId || !clientBranchId)) {
-      throw new AppError(CROSS_BRANCH_DENIED_MESSAGE, 403);
-    }
-  } else if (assignedBranchId && clientBranchId && assignedBranchId !== clientBranchId) {
-    throw new AppError(CROSS_BRANCH_DENIED_MESSAGE, 403);
   }
 }
 
@@ -119,10 +113,16 @@ async function loadUserProfile(authUser) {
     .maybeSingle();
 
   const meta = authUser.user_metadata || {};
+  const role = String(profileRow?.role || meta.role || 'patient').toLowerCase();
+
   if (!error && profileRow) {
     return {
       ...profileRow,
-      branch_id: normalizeBranchId(profileRow.branch_id || meta.branch_id),
+      role,
+      branch_id:
+        role === 'admin' || role === 'patient'
+          ? normalizeBranchId(profileRow.branch_id) || null
+          : normalizeBranchId(profileRow.branch_id || meta.branch_id),
     };
   }
 
@@ -130,8 +130,11 @@ async function loadUserProfile(authUser) {
     id: authUser.id,
     email: authUser.email || null,
     full_name: meta.full_name || authUser.email || 'Victorio ABC User',
-    role: meta.role || 'patient',
-    branch_id: normalizeBranchId(meta.branch_id) || 'santa-maria',
+    role,
+    branch_id:
+      role === 'admin' || role === 'patient'
+        ? normalizeBranchId(meta.branch_id) || null
+        : normalizeBranchId(meta.branch_id),
     license_number: meta.license_number || null,
     is_active: meta.is_active !== false,
   };
@@ -139,7 +142,7 @@ async function loadUserProfile(authUser) {
 
 /**
  * POST /api/v1/auth/login
- * Authenticates credentials and strictly enforces branch-locked login before returning any session/JWT.
+ * Authenticates credentials and enforces passive DB branch_id check for doctor & nurse.
  */
 export const loginWithBranchLock = asyncHandler(async (req, res) => {
   const email = String(req.body?.email || '').trim();
@@ -169,7 +172,6 @@ export const loginWithBranchLock = asyncHandler(async (req, res) => {
     throw new AppError('Account is deactivated. Contact Central Admin.', 403);
   }
 
-  // Strictly enforce cross-branch login blocking (returns 403 and withholds session/JWT if mismatched)
   assertBranchLoginAllowed(resolvedProfile, activeBranchId);
 
   const isPatient = String(resolvedProfile.role).toLowerCase() === 'patient';

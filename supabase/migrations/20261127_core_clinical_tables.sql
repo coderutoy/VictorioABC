@@ -116,6 +116,8 @@ ON CONFLICT (id) DO UPDATE SET
 
 -- ============================================================================
 -- 2. profiles (Linked to Supabase auth.users)
+--    - admin & patient: branch_id is NULL (global / unrestricted branch login)
+--    - doctor & nurse : branch_id is NOT NULL (strictly locked to assigned branch)
 -- ============================================================================
 CREATE TABLE public.profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -125,7 +127,11 @@ CREATE TABLE public.profiles (
   branch_id TEXT REFERENCES public.branches(id) ON DELETE SET NULL,
   license_number TEXT,
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT chk_staff_branch_assignment CHECK (
+    (role IN ('doctor', 'nurse') AND branch_id IS NOT NULL)
+    OR (role IN ('admin', 'patient'))
+  )
 );
 
 CREATE INDEX idx_profiles_branch_role ON public.profiles(branch_id, role);
@@ -275,15 +281,16 @@ CREATE POLICY "branches_select_all"
   ON public.branches FOR SELECT
   USING (true);
 
--- profiles: users can read their own row; branch staff can read profiles in their assigned branch
+-- profiles: users can read their own row; admin can read all profiles; doctor/nurse can read profiles in their assigned branch
 DROP POLICY IF EXISTS "profiles_select_own_or_branch" ON public.profiles;
 CREATE POLICY "profiles_select_own_or_branch"
   ON public.profiles FOR SELECT
   TO authenticated
   USING (
     id = auth.uid()
+    OR public.current_staff_role() = 'admin'
     OR (
-      public.current_staff_role() IN ('admin', 'doctor', 'nurse')
+      public.current_staff_role() IN ('doctor', 'nurse')
       AND branch_id = public.current_staff_branch_id()
     )
   );
@@ -294,71 +301,89 @@ CREATE POLICY "profiles_update_own_or_admin"
   TO authenticated
   USING (
     id = auth.uid()
-    OR (
-      public.current_staff_role() = 'admin'
-      AND branch_id = public.current_staff_branch_id()
-    )
+    OR public.current_staff_role() = 'admin'
   )
   WITH CHECK (
     id = auth.uid()
-    OR (
-      public.current_staff_role() = 'admin'
-      AND branch_id = public.current_staff_branch_id()
-    )
+    OR public.current_staff_role() = 'admin'
   );
 
--- patients: branch staff (admin, doctor, nurse) can read/write records matching their branch_id
+-- patients: admin has global access across all branches; doctor & nurse strictly locked to their assigned branch_id
 DROP POLICY IF EXISTS "patients_branch_staff_all" ON public.patients;
 CREATE POLICY "patients_branch_staff_all"
   ON public.patients FOR ALL
   TO authenticated
   USING (
-    public.current_staff_role() IN ('admin', 'doctor', 'nurse')
-    AND branch_id = public.current_staff_branch_id()
+    public.current_staff_role() = 'admin'
+    OR (
+      public.current_staff_role() IN ('doctor', 'nurse')
+      AND branch_id = public.current_staff_branch_id()
+    )
   )
   WITH CHECK (
-    public.current_staff_role() IN ('admin', 'doctor', 'nurse')
-    AND branch_id = public.current_staff_branch_id()
+    public.current_staff_role() = 'admin'
+    OR (
+      public.current_staff_role() IN ('doctor', 'nurse')
+      AND branch_id = public.current_staff_branch_id()
+    )
   );
 
--- clinical_cases: branch staff (admin, doctor, nurse) can read/write records matching their branch_id
+-- clinical_cases: admin has global access across all branches; doctor & nurse strictly locked to their assigned branch_id
 DROP POLICY IF EXISTS "clinical_cases_branch_staff_all" ON public.clinical_cases;
 CREATE POLICY "clinical_cases_branch_staff_all"
   ON public.clinical_cases FOR ALL
   TO authenticated
   USING (
-    public.current_staff_role() IN ('admin', 'doctor', 'nurse')
-    AND branch_id = public.current_staff_branch_id()
+    public.current_staff_role() = 'admin'
+    OR (
+      public.current_staff_role() IN ('doctor', 'nurse')
+      AND branch_id = public.current_staff_branch_id()
+    )
   )
   WITH CHECK (
-    public.current_staff_role() IN ('admin', 'doctor', 'nurse')
-    AND branch_id = public.current_staff_branch_id()
+    public.current_staff_role() = 'admin'
+    OR (
+      public.current_staff_role() IN ('doctor', 'nurse')
+      AND branch_id = public.current_staff_branch_id()
+    )
   );
 
--- pep_doses: branch staff (admin, doctor, nurse) can read/write records matching their branch_id
+-- pep_doses: admin has global access across all branches; doctor & nurse strictly locked to their assigned branch_id
 DROP POLICY IF EXISTS "pep_doses_branch_staff_all" ON public.pep_doses;
 CREATE POLICY "pep_doses_branch_staff_all"
   ON public.pep_doses FOR ALL
   TO authenticated
   USING (
-    public.current_staff_role() IN ('admin', 'doctor', 'nurse')
-    AND branch_id = public.current_staff_branch_id()
+    public.current_staff_role() = 'admin'
+    OR (
+      public.current_staff_role() IN ('doctor', 'nurse')
+      AND branch_id = public.current_staff_branch_id()
+    )
   )
   WITH CHECK (
-    public.current_staff_role() IN ('admin', 'doctor', 'nurse')
-    AND branch_id = public.current_staff_branch_id()
+    public.current_staff_role() = 'admin'
+    OR (
+      public.current_staff_role() IN ('doctor', 'nurse')
+      AND branch_id = public.current_staff_branch_id()
+    )
   );
 
--- vaccine_inventory: branch staff (admin, doctor, nurse) can read/write records matching their branch_id
+-- vaccine_inventory: admin has global access across all branches; doctor & nurse strictly locked to their assigned branch_id
 DROP POLICY IF EXISTS "vaccine_inventory_branch_staff_all" ON public.vaccine_inventory;
 CREATE POLICY "vaccine_inventory_branch_staff_all"
   ON public.vaccine_inventory FOR ALL
   TO authenticated
   USING (
-    public.current_staff_role() IN ('admin', 'doctor', 'nurse')
-    AND branch_id = public.current_staff_branch_id()
+    public.current_staff_role() = 'admin'
+    OR (
+      public.current_staff_role() IN ('doctor', 'nurse')
+      AND branch_id = public.current_staff_branch_id()
+    )
   )
   WITH CHECK (
-    public.current_staff_role() IN ('admin', 'doctor', 'nurse')
-    AND branch_id = public.current_staff_branch_id()
+    public.current_staff_role() = 'admin'
+    OR (
+      public.current_staff_role() IN ('doctor', 'nurse')
+      AND branch_id = public.current_staff_branch_id()
+    )
   );

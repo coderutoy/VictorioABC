@@ -33,8 +33,6 @@ export function ContactPage() {
     publicBranches,
     selectedPublicBranch,
     setSelectedBranchSlug,
-    distancesBySlug,
-    selectedBranchDistanceKm,
     detectNearestBranch,
   } = useBranch();
   const [areaFilter, setAreaFilter] = useState('All');
@@ -81,19 +79,14 @@ export function ContactPage() {
           <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-2">
               <span className="rounded-full bg-[#118AB2] px-2.5 py-0.5 text-[11px] font-extrabold uppercase text-white">
-                You are in: {selectedPublicBranch.shortName}
+                {selectedPublicBranch.shortName}
               </span>
-              {selectedBranchDistanceKm !== null && (
-                <span className="rounded-full bg-[#7CD5C7]/35 px-2.5 py-0.5 text-[11px] font-extrabold text-[#2E5E59]">
-                  {selectedBranchDistanceKm} km away
-                </span>
-              )}
               <button
                 type="button"
                 onClick={detectNearestBranch}
                 className="text-xs font-extrabold text-[#118AB2] underline hover:text-[#0D6E8E]"
               >
-                Detect Nearest Branch
+                Detect nearest branch
               </button>
             </div>
             <h2 className="text-xl font-extrabold text-[#464B71]">

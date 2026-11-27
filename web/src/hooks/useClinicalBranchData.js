@@ -53,8 +53,18 @@ function buildInitialBranchInventory(branchId = 'santa-maria') {
 }
 
 function buildInitialBranchStaff(branchId = 'santa-maria') {
+  const globalAdmin = {
+    id: 'ea760b21-16ec-4bfc-afbe-4d3e1348c176',
+    email: 'admin@victorioabc.ph',
+    full_name: 'Branch Administrator',
+    role: 'admin',
+    branch_id: null,
+    license_number: 'ADM-HQ-2026',
+    is_active: true,
+  };
   if (branchId === 'baliwag') {
     return [
+      globalAdmin,
       {
         id: 'c904c533-2037-468c-b5f6-6563754c5f0a',
         email: 'nurse.baliwag@victorioabc.ph',
@@ -66,35 +76,30 @@ function buildInitialBranchStaff(branchId = 'santa-maria') {
       },
     ];
   }
-  return [
-    {
-      id: 'ea760b21-16ec-4bfc-afbe-4d3e1348c176',
-      email: 'admin@victorioabc.ph',
-      full_name: 'Branch Administrator',
-      role: 'admin',
-      branch_id: branchId,
-      license_number: 'ADM-SM-2026',
-      is_active: true,
-    },
-    {
-      id: '481a0047-e4f9-4143-8e5c-8eee72c1f683',
-      email: 'doctor@victorioabc.ph',
-      full_name: 'Dr. Maria Santos',
-      role: 'doctor',
-      branch_id: branchId,
-      license_number: 'PRC-MD-104829',
-      is_active: true,
-    },
-    {
-      id: '82c822a2-0f42-43ca-b09c-e734875a6206',
-      email: 'nurse@victorioabc.ph',
-      full_name: 'Nurse Camille Reyes',
-      role: 'nurse',
-      branch_id: branchId,
-      license_number: 'PRC-RN-209381',
-      is_active: true,
-    },
-  ];
+  if (branchId === 'santa-maria') {
+    return [
+      globalAdmin,
+      {
+        id: '481a0047-e4f9-4143-8e5c-8eee72c1f683',
+        email: 'doctor@victorioabc.ph',
+        full_name: 'Dr. Maria Santos',
+        role: 'doctor',
+        branch_id: 'santa-maria',
+        license_number: 'PRC-MD-104829',
+        is_active: true,
+      },
+      {
+        id: '82c822a2-0f42-43ca-b09c-e734875a6206',
+        email: 'nurse@victorioabc.ph',
+        full_name: 'Nurse Camille Reyes',
+        role: 'nurse',
+        branch_id: 'santa-maria',
+        license_number: 'PRC-RN-209381',
+        is_active: true,
+      },
+    ];
+  }
+  return [globalAdmin];
 }
 
 function addDaysIso(baseDateStr, days) {

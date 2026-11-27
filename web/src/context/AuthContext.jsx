@@ -29,31 +29,34 @@ export function getRoleHome(role) {
 }
 
 export const CROSS_BRANCH_DENIED_MESSAGE =
-  'Access denied: Your account is assigned to a different branch and cannot sign in from this branch location.';
+  'This account is not assigned to this branch. Please switch to your assigned branch and try again.';
 
 function normalizeBranchSlug(val) {
   if (!val) return null;
-  return getBranchBySlug(val).slug;
+  const cleaned = String(val).trim();
+  if (!cleaned) return null;
+  return getBranchBySlug(cleaned).slug;
 }
 
-function verifyClientSideBranchMatch(profile, activeBranch) {
+/**
+ * Passive database `branch_id` validation:
+ * - `admin` & `patient`: unrestricted across all branches (`branch_id` may be NULL).
+ * - `doctor` & `nurse` : strictly tied to their assigned `profile.branch_id`.
+ */
+export function verifyClientSideBranchMatch(profile, activeBranch) {
   if (!profile || !activeBranch) return;
   const role = String(profile.role || 'patient').toLowerCase();
-  const assignedSlug = profile.branch_id ? normalizeBranchSlug(profile.branch_id) : null;
-  const activeSlug = normalizeBranchSlug(activeBranch.slug || activeBranch.id);
 
-  const isSuperAdmin = Boolean(profile.super_admin);
-  const isStaff =
-    role === ROLES.DOCTOR ||
-    role === ROLES.NURSE ||
-    (role === ROLES.ADMIN && !isSuperAdmin);
+  if (role === ROLES.ADMIN || role === ROLES.PATIENT) {
+    return;
+  }
 
-  if (isStaff) {
+  if (role === ROLES.DOCTOR || role === ROLES.NURSE) {
+    const assignedSlug = normalizeBranchSlug(profile.branch_id);
+    const activeSlug = normalizeBranchSlug(activeBranch.slug || activeBranch.id);
     if (!assignedSlug || !activeSlug || assignedSlug !== activeSlug) {
       throw new Error(CROSS_BRANCH_DENIED_MESSAGE);
     }
-  } else if (assignedSlug && activeSlug && assignedSlug !== activeSlug) {
-    throw new Error(CROSS_BRANCH_DENIED_MESSAGE);
   }
 }
 
@@ -85,9 +88,15 @@ export function AuthProvider({ children }) {
     const meta = resolvedUser?.user_metadata || {};
 
     if (!error && data) {
+      const role = String(data.role || meta.role || 'patient').toLowerCase();
+      const rawBranch = data.branch_id !== undefined ? data.branch_id : meta.branch_id;
       const normalizedProfile = {
         ...data,
-        branch_id: normalizeBranchSlug(data.branch_id || meta.branch_id) || DEFAULT_BRANCH_SLUG,
+        role,
+        branch_id:
+          role === ROLES.ADMIN || role === ROLES.PATIENT
+            ? normalizeBranchSlug(rawBranch) || null
+            : normalizeBranchSlug(rawBranch),
       };
       setAuthError(null);
       setProfile(normalizedProfile);
@@ -95,12 +104,16 @@ export function AuthProvider({ children }) {
     }
 
     if (resolvedUser) {
+      const role = String(meta.role || 'patient').toLowerCase();
       const fallbackProfile = {
         id: resolvedUser.id,
         email: resolvedUser.email || null,
         full_name: meta.full_name || resolvedUser.email || 'Victorio ABC User',
-        role: meta.role || 'patient',
-        branch_id: normalizeBranchSlug(meta.branch_id) || DEFAULT_BRANCH_SLUG,
+        role,
+        branch_id:
+          role === ROLES.ADMIN || role === ROLES.PATIENT
+            ? normalizeBranchSlug(meta.branch_id) || null
+            : normalizeBranchSlug(meta.branch_id),
         license_number: meta.license_number || null,
         is_active: meta.is_active !== false,
       };
@@ -132,7 +145,19 @@ export function AuthProvider({ children }) {
 
         if (initialSession?.user?.id) {
           const loadedProfile = await fetchProfile(initialSession.user);
-          if (loadedProfile?.role === ROLES.PATIENT) {
+          const currentBranchSlug =
+            typeof window !== 'undefined'
+              ? getBranchBySlug(
+                  window.localStorage.getItem(BRANCH_STORAGE_KEY) || DEFAULT_BRANCH_SLUG
+                ).slug
+              : DEFAULT_BRANCH_SLUG;
+
+          const isStaffMismatch =
+            (loadedProfile?.role === ROLES.DOCTOR ||
+              loadedProfile?.role === ROLES.NURSE) &&
+            loadedProfile?.branch_id !== currentBranchSlug;
+
+          if (loadedProfile?.role === ROLES.PATIENT || isStaffMismatch) {
             await supabase.auth.signOut();
             if (isMounted) {
               setSession(null);
@@ -185,7 +210,7 @@ export function AuthProvider({ children }) {
           : DEFAULT_BRANCH_SLUG
       );
 
-    // 1. Authenticate directly against Supabase Auth with VITE_SUPABASE_ANON_KEY
+    // 1. Authenticate credentials via Supabase Auth (signInWithPassword)
     const { data, error } = await supabase.auth.signInWithPassword({
       email: String(email || '').trim(),
       password,
@@ -197,44 +222,43 @@ export function AuthProvider({ children }) {
       throw new Error(msg);
     }
 
-    // 2. Load user profile from public.profiles (with signed user_metadata fallback)
+    // 2. Query profiles for the authenticated user's id to get role and branch_id
     const loadedProfile = await fetchProfile(data.user);
+    const resolvedRole = String(loadedProfile?.role || 'patient').toLowerCase();
 
-    // 3. Enforce strict branch lock on the client AND verify with backend /api/v1/auth/verify-branch if reachable
-    try {
-      verifyClientSideBranchMatch(loadedProfile, activeBranch);
-    } catch (branchErr) {
-      await supabase.auth.signOut();
-      setSession(null);
-      setProfile(null);
-      setAuthError(branchErr.message);
-      const errObj = new Error(branchErr.message);
-      errObj.status = 403;
-      throw errObj;
-    }
-
-    try {
-      await api.post('/auth/verify-branch', {
-        branch_id: activeBranch.id,
-        branch_slug: activeBranch.slug,
-      });
-    } catch (apiErr) {
-      if (apiErr?.response?.status === 403) {
+    // 3. If role === 'doctor' || role === 'nurse', passively compare profile.branch_id against activeBranch.id
+    if (resolvedRole === ROLES.DOCTOR || resolvedRole === ROLES.NURSE) {
+      try {
+        verifyClientSideBranchMatch(loadedProfile, activeBranch);
+      } catch (branchErr) {
         await supabase.auth.signOut();
         setSession(null);
         setProfile(null);
-        const msg = apiErr.response.data?.message || CROSS_BRANCH_DENIED_MESSAGE;
-        setAuthError(msg);
-        const errObj = new Error(msg);
+        setAuthError(CROSS_BRANCH_DENIED_MESSAGE);
+        const errObj = new Error(CROSS_BRANCH_DENIED_MESSAGE);
         errObj.status = 403;
         throw errObj;
       }
-      // Ignore network/offline errors on verify-branch since client-side check already verified
+
+      try {
+        await api.post('/auth/verify-branch', {
+          branch_id: activeBranch.id,
+          branch_slug: activeBranch.slug,
+        });
+      } catch (apiErr) {
+        if (apiErr?.response?.status === 403) {
+          await supabase.auth.signOut();
+          setSession(null);
+          setProfile(null);
+          setAuthError(CROSS_BRANCH_DENIED_MESSAGE);
+          const errObj = new Error(CROSS_BRANCH_DENIED_MESSAGE);
+          errObj.status = 403;
+          throw errObj;
+        }
+      }
     }
 
-    const resolvedRole = String(loadedProfile?.role || 'patient').toLowerCase();
-
-    // 4. Patient role: do NOT establish a web clinical session; route strictly to /mobile-app-only
+    // 4. If role === 'patient': skip branch restriction and navigate to /mobile-app-only
     if (resolvedRole === ROLES.PATIENT) {
       await supabase.auth.signOut();
       setSession(null);
@@ -246,6 +270,7 @@ export function AuthProvider({ children }) {
       };
     }
 
+    // 5. If role === 'admin' (or branch-matched doctor/nurse): keep session active
     setSession(data.session);
     setProfile(loadedProfile);
     return {
@@ -257,11 +282,11 @@ export function AuthProvider({ children }) {
     };
   };
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     await supabase.auth.signOut();
     setSession(null);
     setProfile(null);
-  };
+  }, []);
 
   const value = {
     session,

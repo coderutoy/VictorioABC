@@ -184,12 +184,16 @@ export const getClinicalOverview = asyncHandler(async (req, res) => {
     staff = (authList?.users || [])
       .map((u) => {
         const m = u.user_metadata || {};
+        const role = m.role || 'patient';
         return {
           id: u.id,
           email: u.email,
           full_name: m.full_name || u.email,
-          role: m.role || 'patient',
-          branch_id: normalizeBranchId(m.branch_id) || 'santa-maria',
+          role,
+          branch_id:
+            role === 'admin' || role === 'patient'
+              ? normalizeBranchId(m.branch_id) || null
+              : normalizeBranchId(m.branch_id),
           license_number: m.license_number || null,
           is_active: m.is_active !== false,
           created_at: u.created_at,
@@ -197,7 +201,7 @@ export const getClinicalOverview = asyncHandler(async (req, res) => {
       })
       .filter(
         (p) =>
-          p.branch_id === branchId &&
+          (p.branch_id === branchId || p.role === 'admin') &&
           ['admin', 'doctor', 'nurse'].includes(p.role)
       );
   }
