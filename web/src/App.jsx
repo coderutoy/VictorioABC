@@ -1,8 +1,13 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { ROLES, STAFF_ROLES } from './context/AuthContext';
 import { AppShell } from './components/layout/AppShell';
+import { PublicLayout } from './components/public/PublicLayout';
 import { RoleRoute } from './components/routing/RoleRoute';
 import { PublicLandingPage } from './pages/PublicLandingPage';
+import { AboutPage } from './pages/AboutPage';
+import { ServicesPage } from './pages/ServicesPage';
+import { FaqPage } from './pages/FaqPage';
+import { ContactPage } from './pages/ContactPage';
 import { LoginPage } from './pages/LoginPage';
 import { UnauthorizedPage } from './pages/UnauthorizedPage';
 import { DashboardPage } from './pages/DashboardPage';
@@ -18,8 +23,15 @@ import { AuditLogsPage } from './pages/AuditLogsPage';
 export default function App() {
   return (
     <Routes>
-      {/* Public-Facing Mobile-Responsive Website */}
-      <Route path="/" element={<PublicLandingPage />} />
+      {/* Public-Facing Mobile-Responsive Website with Shared Header & Footer */}
+      <Route element={<PublicLayout />}>
+        <Route path="/" element={<PublicLandingPage />} />
+        <Route path="/about" element={<AboutPage />} />
+        <Route path="/services" element={<ServicesPage />} />
+        <Route path="/faq" element={<FaqPage />} />
+        <Route path="/contact" element={<ContactPage />} />
+      </Route>
+
       <Route path="/login" element={<LoginPage />} />
       <Route path="/unauthorized" element={<UnauthorizedPage />} />
 

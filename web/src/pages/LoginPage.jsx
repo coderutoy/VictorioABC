@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { ShieldAlert, Lock, ArrowLeft } from 'lucide-react';
+import { ShieldAlert, Lock, ArrowLeft, MapPin } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useBranch } from '../context/BranchContext';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 
 export function LoginPage() {
   const { isAuthenticated, isSupabaseConfigured, signIn } = useAuth();
+  const { publicBranches, selectedPublicBranch, setSelectedBranchSlug } = useBranch();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -49,18 +51,46 @@ export function LoginPage() {
         </Link>
 
         <div className="rounded-2xl border border-[#DDDCD4] bg-white p-8 shadow-sm">
-          <div className="mb-6 flex items-center gap-3.5">
+          <div className="mb-5 flex items-center gap-3.5">
             <img
               src="/victorio_logo.jpg"
               alt="Victorio Animal Bite Center Logo"
               className="h-14 w-14 rounded-full border-2 border-[#7CD5C7] object-cover shadow-sm"
             />
             <div>
-              <h1 className="text-xl font-bold text-[#464B71]">Victorio ABC Portal</h1>
-              <p className="text-xs font-medium text-[#118AB2]">
-                San Jose del Monte • Multi-Branch Rabies PEP &amp; EMR
+              <h1 className="text-xl font-extrabold text-[#464B71]">Victorio ABC Portal</h1>
+              <p className="text-xs font-semibold text-[#118AB2]">
+                7-Branch Multi-Tenant Rabies PEP &amp; EMR
               </p>
             </div>
+          </div>
+
+          {/* Active Multi-Tenant Branch Selector Badge */}
+          <div className="mb-5 rounded-xl border border-[#7CD5C7] bg-[#7CD5C7]/20 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 text-xs font-extrabold text-[#464B71]">
+                <MapPin className="h-4 w-4 text-[#118AB2]" />
+                <span>Branch Server Context:</span>
+              </div>
+              <span className="rounded-full bg-[#118AB2] px-2 py-0.5 text-[10px] font-bold text-white">
+                {selectedPublicBranch.serverTenantId}
+              </span>
+            </div>
+            <select
+              aria-label="Select active branch for portal login"
+              value={selectedPublicBranch.slug}
+              onChange={(e) => setSelectedBranchSlug(e.target.value)}
+              className="mt-2 w-full rounded-lg border border-[#DDDCD4] bg-white px-2.5 py-1.5 text-xs font-bold text-[#464B71] focus:border-[#118AB2] focus:outline-none"
+            >
+              {publicBranches.map((b) => (
+                <option key={b.slug} value={b.slug}>
+                  {b.shortName} — {b.contactNumber}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1.5 text-[11px] text-[#464B71]/80">
+              {selectedPublicBranch.address}
+            </p>
           </div>
 
           {!isSupabaseConfigured && (

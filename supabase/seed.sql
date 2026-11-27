@@ -1,31 +1,77 @@
 ﻿-- ============================================================================
--- Victorio ABC — Development Seed Data (Branches, HQ Stock, Patient Education)
+-- Victorio ABC — Development Seed Data (7 Official Branches, HQ Stock, Patient Education)
 -- ============================================================================
 
-INSERT INTO public.branches (id, name, address, barangay, municipality, latitude, longitude, contact_number, operating_hours, status)
+INSERT INTO public.branches (id, name, address, barangay, municipality, contact_number, operating_hours, status)
 VALUES
   (
     '11111111-1111-1111-1111-111111111101',
-    'Victorio ABC — Tungkong Mangga Main',
-    'Quirino Highway, Brgy. Tungkong Mangga',
-    'Tungkong Mangga',
-    'San Jose del Monte',
-    14.7915,
-    121.0772,
-    '+63-917-555-0101',
-    '{"mon_sat": "08:00-17:00", "sun": "08:00-12:00"}'::jsonb,
+    'Victorio ABC — Baliwag, Bulacan',
+    'XV5X+MG7, Benigno S. Aquino Avenue, Baliwag, Bulacan',
+    'Benigno S. Aquino Ave',
+    'Baliwag, Bulacan',
+    '09933269641',
+    '{"daily": "08:00-17:00"}'::jsonb,
     'active'
   ),
   (
     '11111111-1111-1111-1111-111111111102',
-    'Victorio ABC — Muzon Branch',
-    'Muzon Crossing, Brgy. Muzon',
-    'Muzon',
-    'San Jose del Monte',
-    14.8124,
-    121.0449,
-    '+63-917-555-0102',
-    '{"mon_sat": "08:00-17:00", "sun": "closed"}'::jsonb,
+    'Victorio ABC — Santa Maria, Bulacan',
+    'RXF3+GR7, Santa Maria Bypass Rd, Santa Maria, Bulacan',
+    'Santa Maria Bypass Rd',
+    'Santa Maria, Bulacan',
+    '09454378284',
+    '{"daily": "08:00-17:00"}'::jsonb,
+    'active'
+  ),
+  (
+    '11111111-1111-1111-1111-111111111103',
+    'Victorio ABC — Mapulang Lupa, Pandi',
+    '98 Pandi Angat Rd, Pandi, Bulacan',
+    'Mapulang Lupa',
+    'Pandi, Bulacan',
+    '09101909050',
+    '{"daily": "08:00-17:00"}'::jsonb,
+    'active'
+  ),
+  (
+    '11111111-1111-1111-1111-111111111104',
+    'Victorio ABC — DRT, Bulacan',
+    '201 M. Valte Road, Pulong Sampalok, Dona Remedios Trinidad, Bulacan',
+    'Pulong Sampalok',
+    'Doña Remedios Trinidad, Bulacan',
+    '09751861541',
+    '{"daily": "08:00-17:00"}'::jsonb,
+    'active'
+  ),
+  (
+    '11111111-1111-1111-1111-111111111105',
+    'Victorio ABC — Meycauayan, Bulacan (Camalig)',
+    'Blk 64 Lot 9 El Camino Real Camalig, Meycauayan, Bulacan',
+    'Camalig',
+    'Meycauayan, Bulacan',
+    '09517734066',
+    '{"daily": "08:00-17:00"}'::jsonb,
+    'active'
+  ),
+  (
+    '11111111-1111-1111-1111-111111111106',
+    'Victorio ABC — Poblacion / Calvario, Meycauayan',
+    '009 Pacheco Street, Calvario, Meycauayan, 3020 Bulacan',
+    'Calvario / Poblacion',
+    'Meycauayan, Bulacan',
+    '09101909050',
+    '{"daily": "08:00-17:00"}'::jsonb,
+    'active'
+  ),
+  (
+    '11111111-1111-1111-1111-111111111107',
+    'Victorio ABC — Cefels, Caloocan',
+    'Flojems Building Second Floor, Cefeles, Caloocan, 1427 Metro Manila',
+    'Cefels',
+    'Caloocan, Metro Manila',
+    '09453311310',
+    '{"daily": "08:00-17:00"}'::jsonb,
     'active'
   )
 ON CONFLICT (name) DO NOTHING;
