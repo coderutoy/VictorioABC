@@ -1,9 +1,8 @@
 import { useLocation } from 'react-router-dom';
-import { useAccessibility } from '../context/AccessibilityContext';
 
 /**
  * Route-to-Pattern Version Mapping (3 Rotating Dogs & Cats Background Versions):
- * - Version 1 (/backgrounds/pets-pattern-v1.svg): '/', '/about', '/privacy-policy'
+ * - Version 1 (/backgrounds/pets-pattern-v1.svg): '/', '/about', '/privacy-policy', '/login', '/mobile-app'
  * - Version 2 (/backgrounds/pets-pattern-v2.svg): '/services', '/protocols', '/faq'
  * - Version 3 (/backgrounds/pets-pattern-v3.svg): '/roadmap', '/triage-guide', '/careers', '/contact'
  */
@@ -44,14 +43,7 @@ const PATTERN_CONFIGS = [
 
 export function PagePetBackground() {
   const { pathname } = useLocation();
-  const { highContrast, reduceMotion } = useAccessibility();
   const activeVersion = resolvePetBackgroundVersion(pathname);
-
-  // Half opacity (opacity-50) behind text by default; lowered to opacity-10 in High Contrast Mode
-  const activeOpacityClass = highContrast ? 'opacity-10' : 'opacity-50';
-  const transitionClass = reduceMotion
-    ? 'transition-none'
-    : 'transition-opacity duration-500 ease-in-out';
 
   return (
     <div
@@ -65,8 +57,8 @@ export function PagePetBackground() {
           <div
             key={cfg.version}
             data-version={`v${cfg.version}`}
-            className={`absolute inset-0 bg-repeat ${transitionClass} ${
-              isCurrent ? activeOpacityClass : 'opacity-0'
+            className={`absolute inset-0 bg-repeat transition-opacity duration-500 ease-in-out ${
+              isCurrent ? 'opacity-50' : 'opacity-0'
             }`}
             style={{
               backgroundImage: `url('${cfg.url}')`,

@@ -4,22 +4,19 @@ import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { BranchProvider } from './context/BranchContext';
 import { CookieConsentProvider } from './context/CookieConsentContext';
-import { AccessibilityProvider } from './context/AccessibilityContext';
 import App from './App';
 import './index.css';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <BrowserRouter>
-      <AccessibilityProvider>
-        <CookieConsentProvider>
-          <AuthProvider>
-            <BranchProvider>
-              <App />
-            </BranchProvider>
-          </AuthProvider>
-        </CookieConsentProvider>
-      </AccessibilityProvider>
+      <CookieConsentProvider>
+        <AuthProvider>
+          <BranchProvider>
+            <App />
+          </BranchProvider>
+        </AuthProvider>
+      </CookieConsentProvider>
     </BrowserRouter>
   </StrictMode>
 );

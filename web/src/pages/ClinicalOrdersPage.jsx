@@ -564,7 +564,7 @@ export function ClinicalOrdersPage() {
                     {selectedCase.ai_suggested_category && (
                       <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-900">
                         <span className="font-semibold">
-                          Triage / AI Suggestion: Category {selectedCase.ai_suggested_category}
+                          Nurse Triage Preliminary: Category {selectedCase.ai_suggested_category}
                         </span>
                         {selectedCase.ai_confidence && (
                           <span className="ml-1">

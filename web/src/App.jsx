@@ -15,6 +15,7 @@ import { FaqPage } from './pages/FaqPage';
 import { ContactPage } from './pages/ContactPage';
 import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
 import { LoginPage } from './pages/LoginPage';
+import { MobileAppRequiredPage } from './pages/MobileAppRequiredPage';
 import { UnauthorizedPage } from './pages/UnauthorizedPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { PatientsPage } from './pages/PatientsPage';
@@ -45,6 +46,7 @@ export default function App() {
         </Route>
 
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/mobile-app" element={<MobileAppRequiredPage />} />
         <Route path="/unauthorized" element={<UnauthorizedPage />} />
 
         {/* Authenticated Clinical Portal */}

@@ -14,9 +14,8 @@ export const CONSENT_VALUES = Object.freeze({
 const SIX_MONTHS_SECONDS = 15552000; // 180 days
 
 /**
- * Allowed non-sensitive UI keys in localStorage (besides Supabase Auth's internal session token).
  * Ensures zero patient PII/PHI (names, bite categories, contact numbers, addresses, medical records)
- * is ever persisted in browser storage.
+ * is ever persisted in browser storage, and cleans up removed legacy accessibility keys.
  */
 const FORBIDDEN_PII_KEY_REGEX =
   /patient|medical|bite_case|clinical_order|phone|address|birthdate|government_id|philhealth|wound/i;
@@ -24,6 +23,13 @@ const FORBIDDEN_PII_KEY_REGEX =
 function sanitizeBrowserStorageForHealthcarePrivacy() {
   if (typeof window === 'undefined') return;
   try {
+    // Clean up legacy accessibility toolbar state so font-size is never stuck
+    window.localStorage.removeItem('vabc_a11y_prefs');
+    if (typeof document !== 'undefined') {
+      document.documentElement.style.fontSize = '';
+      document.documentElement.classList.remove('vabc-high-contrast', 'vabc-reduce-motion');
+    }
+
     for (const storage of [window.localStorage, window.sessionStorage]) {
       if (!storage) continue;
       const keysToRemove = [];
@@ -40,34 +46,73 @@ function sanitizeBrowserStorageForHealthcarePrivacy() {
   }
 }
 
+function buildConsentRecord(status) {
+  const isAccepted = status === CONSENT_VALUES.ACCEPTED;
+  return {
+    essential: true,
+    analytics: isAccepted,
+    consentGiven: true,
+    status: isAccepted ? CONSENT_VALUES.ACCEPTED : CONSENT_VALUES.ESSENTIAL_ONLY,
+    timestamp: new Date().toISOString(),
+  };
+}
+
+function parseStoredConsentRecord(raw) {
+  if (!raw) return null;
+  if (raw === CONSENT_VALUES.ACCEPTED || raw === CONSENT_VALUES.ESSENTIAL_ONLY) {
+    return buildConsentRecord(raw);
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object' && parsed.consentGiven === true) {
+      const isAccepted =
+        parsed.analytics === true || parsed.status === CONSENT_VALUES.ACCEPTED;
+      return {
+        essential: true,
+        analytics: Boolean(isAccepted),
+        consentGiven: true,
+        status: isAccepted ? CONSENT_VALUES.ACCEPTED : CONSENT_VALUES.ESSENTIAL_ONLY,
+        timestamp: parsed.timestamp || new Date().toISOString(),
+      };
+    }
+  } catch {
+    // Ignore malformed JSON
+  }
+  return null;
+}
+
 function readConsentCookie() {
   if (typeof document === 'undefined' || !document.cookie) return null;
   const parts = document.cookie.split(';');
   for (const part of parts) {
-    const [rawName, rawVal] = part.split('=');
+    const eqIdx = part.indexOf('=');
+    const rawName = eqIdx > -1 ? part.slice(0, eqIdx) : part;
+    const rawVal = eqIdx > -1 ? part.slice(eqIdx + 1) : '';
     if (rawName?.trim() === CONSENT_COOKIE_NAME) {
-      const val = rawVal?.trim();
-      if (val === CONSENT_VALUES.ACCEPTED || val === CONSENT_VALUES.ESSENTIAL_ONLY) {
-        return val;
-      }
+      const val = decodeURIComponent(rawVal?.trim() || '');
+      const parsed = parseStoredConsentRecord(val);
+      if (parsed) return parsed;
     }
   }
   return null;
 }
 
-function writeConsentCookie(value) {
-  if (typeof document === 'undefined') return;
+function writeConsentCookie(record) {
+  if (typeof document === 'undefined' || !record) return;
   const isHttps = typeof window !== 'undefined' && window.location?.protocol === 'https:';
   const secureFlag = isHttps ? '; Secure' : '';
-  document.cookie = `${CONSENT_COOKIE_NAME}=${value}; path=/; max-age=${SIX_MONTHS_SECONDS}; SameSite=Lax${secureFlag}`;
+  document.cookie = `${CONSENT_COOKIE_NAME}=${encodeURIComponent(record.status)}; path=/; max-age=${SIX_MONTHS_SECONDS}; SameSite=Lax${secureFlag}`;
 }
 
-function readInitialConsent() {
+function readInitialConsentRecord() {
   if (typeof window === 'undefined') return null;
   try {
     const stored = window.localStorage.getItem(CONSENT_STORAGE_KEY);
-    if (stored === CONSENT_VALUES.ACCEPTED || stored === CONSENT_VALUES.ESSENTIAL_ONLY) {
-      return stored;
+    const parsed = parseStoredConsentRecord(stored);
+    if (parsed) {
+      // Ensure localStorage is normalized to structured JSON object format
+      window.localStorage.setItem(CONSENT_STORAGE_KEY, JSON.stringify(parsed));
+      return parsed;
     }
   } catch {
     // Fallback to first-party cookie
@@ -78,50 +123,64 @@ function readInitialConsent() {
 const CookieConsentContext = createContext(null);
 
 export function CookieConsentProvider({ children }) {
-  const [consent, setConsent] = useState(readInitialConsent);
-  const [isBannerOpen, setIsBannerOpen] = useState(() => readInitialConsent() === null);
+  const [consentRecord, setConsentRecord] = useState(readInitialConsentRecord);
+  const [isBannerOpen, setIsBannerOpen] = useState(() => readInitialConsentRecord() === null);
   const [openedFromPreferences, setOpenedFromPreferences] = useState(false);
+
+  const consent = consentRecord ? consentRecord.status : null;
 
   // Enforce healthcare storage hygiene and apply conditional script blocking on mount & consent change
   useEffect(() => {
     sanitizeBrowserStorageForHealthcarePrivacy();
 
-    if (consent === CONSENT_VALUES.ACCEPTED) {
+    if (consentRecord?.analytics) {
       loadNonEssentialScripts(CONSENT_VALUES.ACCEPTED);
     } else {
-      // Both null (unanswered) and 'essential_only' strictly block non-essential scripts
       blockOrCleanupNonEssentialScripts();
     }
-  }, [consent]);
+  }, [consentRecord]);
 
-  const saveDecision = useCallback((nextValue) => {
-    setConsent(nextValue);
+  const saveConsentPreferences = useCallback(({ analytics = false } = {}) => {
+    const nextStatus = analytics
+      ? CONSENT_VALUES.ACCEPTED
+      : CONSENT_VALUES.ESSENTIAL_ONLY;
+    const record = {
+      essential: true,
+      analytics: Boolean(analytics),
+      consentGiven: true,
+      status: nextStatus,
+      timestamp: new Date().toISOString(),
+    };
+
+    setConsentRecord(record);
     setIsBannerOpen(false);
     setOpenedFromPreferences(false);
 
     try {
       if (typeof window !== 'undefined') {
-        window.localStorage.setItem(CONSENT_STORAGE_KEY, nextValue);
+        window.localStorage.setItem(CONSENT_STORAGE_KEY, JSON.stringify(record));
       }
     } catch {
       // Ignore storage write errors
     }
-    writeConsentCookie(nextValue);
+    writeConsentCookie(record);
 
-    if (nextValue === CONSENT_VALUES.ACCEPTED) {
+    if (record.analytics) {
       loadNonEssentialScripts(CONSENT_VALUES.ACCEPTED);
     } else {
       blockOrCleanupNonEssentialScripts();
     }
+
+    return record;
   }, []);
 
   const acceptAll = useCallback(() => {
-    saveDecision(CONSENT_VALUES.ACCEPTED);
-  }, [saveDecision]);
+    return saveConsentPreferences({ analytics: true });
+  }, [saveConsentPreferences]);
 
   const rejectNonEssential = useCallback(() => {
-    saveDecision(CONSENT_VALUES.ESSENTIAL_ONLY);
-  }, [saveDecision]);
+    return saveConsentPreferences({ analytics: false });
+  }, [saveConsentPreferences]);
 
   const openCookiePreferences = useCallback(() => {
     setOpenedFromPreferences(true);
@@ -129,28 +188,30 @@ export function CookieConsentProvider({ children }) {
   }, []);
 
   const closeCookiePreferences = useCallback(() => {
-    if (consent !== null) {
-      setIsBannerOpen(false);
-      setOpenedFromPreferences(false);
-    }
-  }, [consent]);
+    setIsBannerOpen(false);
+    setOpenedFromPreferences(false);
+  }, []);
 
   const value = useMemo(
     () => ({
       consent,
+      consentRecord,
       isBannerOpen,
       openedFromPreferences,
       acceptAll,
       rejectNonEssential,
+      saveConsentPreferences,
       openCookiePreferences,
       closeCookiePreferences,
     }),
     [
       consent,
+      consentRecord,
       isBannerOpen,
       openedFromPreferences,
       acceptAll,
       rejectNonEssential,
+      saveConsentPreferences,
       openCookiePreferences,
       closeCookiePreferences,
     ]

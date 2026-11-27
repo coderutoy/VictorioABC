@@ -16,7 +16,6 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useBranch } from '../context/BranchContext';
-import { useAccessibility } from '../context/AccessibilityContext';
 import { formatPhoneDisplay } from '../config/branches';
 
 const DEDICATED_GUIDE_CARDS = [
@@ -25,7 +24,7 @@ const DEDICATED_GUIDE_CARDS = [
     badge: 'First-Aid & WHO Cat I–III',
     title: 'Emergency Bite & Triage Guide',
     summary:
-      'Step-by-step 15-minute wound washing guide, WHO Category I–III visual criteria, and interactive advisory exposure check.',
+      'Step-by-step 15-minute wound washing guide, immediate emergency first-aid steps, and WHO Category I–III visual exposure criteria.',
     cta: 'Open Triage Guide',
     icon: ShieldCheck,
     accent: 'border-[#118AB2] bg-white/95',
@@ -47,7 +46,7 @@ const DEDICATED_GUIDE_CARDS = [
     badge: 'DOH / WHO Standards',
     title: 'Clinical & ERIG Protocols',
     summary:
-      'Physician clinical decision matrix, weight-based ERIG (40 IU/kg) & HRIG (20 IU/kg) dosage calculator, and Tetanus protocols.',
+      'Physician clinical decision matrix, weight-based ERIG (40 IU/kg) & HRIG (20 IU/kg) dosage reference, and Tetanus protocols.',
     cta: 'Open Clinical Protocols',
     icon: Stethoscope,
     accent: 'border-[#7CD5C7] bg-white/95',
@@ -81,12 +80,9 @@ const CLINIC_HIGHLIGHTS = [
 
 export function PublicLandingPage() {
   const { isAuthenticated } = useAuth();
-  const { selectedPublicBranch } = useBranch();
-  const { highContrast } = useAccessibility();
+  const { selectedPublicBranch, selectedBranchDistanceKm } = useBranch();
 
-  const portalPath = isAuthenticated
-    ? '/dashboard'
-    : `/login?branch=${encodeURIComponent(selectedPublicBranch.slug)}`;
+  const portalPath = isAuthenticated ? '/dashboard' : '/login';
 
   const formattedPhone =
     selectedPublicBranch.displayPhone ||
@@ -97,16 +93,14 @@ export function PublicLandingPage() {
       {/* 1. Compact, Balanced Hero / Branch Spotlight Section */}
       <section className="relative overflow-hidden bg-[#464B71] py-8 text-white shadow-md sm:py-10 lg:py-12">
         {/* Soft Radial Glow / Light Organic Contrast Backdrop Directly Behind the Bottom-Right Pets */}
-        {!highContrast && (
-          <div
-            aria-hidden="true"
-            className="pointer-events-none select-none absolute -bottom-12 -right-12 z-0 h-[240px] w-[280px] rounded-full blur-2xl sm:h-[320px] sm:w-[380px] lg:h-[440px] lg:w-[540px]"
-            style={{
-              background:
-                'radial-gradient(circle at 65% 65%, rgba(242, 242, 237, 0.48) 0%, rgba(124, 213, 199, 0.28) 44%, rgba(70, 75, 113, 0) 76%)',
-            }}
-          />
-        )}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none select-none absolute -bottom-12 -right-12 z-0 h-[240px] w-[280px] rounded-full blur-2xl sm:h-[320px] sm:w-[380px] lg:h-[440px] lg:w-[540px]"
+          style={{
+            background:
+              'radial-gradient(circle at 65% 65%, rgba(242, 242, 237, 0.48) 0%, rgba(124, 213, 199, 0.28) 44%, rgba(70, 75, 113, 0) 76%)',
+          }}
+        />
 
         {/* Decorative Bottom-Right Two Dogs & Two Cats Vector Cutout SVG */}
         <img
@@ -115,9 +109,7 @@ export function PublicLandingPage() {
           aria-hidden="true"
           loading="eager"
           decoding="async"
-          className={`pointer-events-none select-none absolute bottom-0 right-0 z-0 h-auto w-[190px] sm:w-[260px] lg:w-[400px] xl:w-[480px] max-w-[42vw] bg-transparent object-contain object-right-bottom transition-opacity duration-300 ${
-            highContrast ? 'opacity-10' : 'opacity-20 sm:opacity-35 lg:opacity-95'
-          }`}
+          className="pointer-events-none select-none absolute bottom-0 right-0 z-0 h-auto w-[190px] max-w-[42vw] bg-transparent object-contain object-right-bottom opacity-20 transition-opacity duration-300 sm:w-[260px] sm:opacity-35 lg:w-[400px] lg:opacity-95 xl:w-[480px]"
         />
 
         {/* Foreground Content Centered & Cohesively Aligned With Branch Card and Pets */}
@@ -144,7 +136,7 @@ export function PublicLandingPage() {
                   to={portalPath}
                   className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-[#118AB2] px-6 py-3 text-sm font-extrabold text-white shadow-md transition hover:bg-[#0D6E8E] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#7CD5C7]"
                 >
-                  <span>{isAuthenticated ? 'Open Clinical Portal' : 'Portal Sign In'}</span>
+                  <span>{isAuthenticated ? 'Open Dashboard' : 'Sign In'}</span>
                   <ArrowRight className="h-4 w-4" />
                 </Link>
                 <Link
@@ -157,11 +149,11 @@ export function PublicLandingPage() {
               </div>
             </div>
 
-            {/* Active Nearest-Branch Spotlight Card (Cohesively Centered & Aligned With Pets) */}
+            {/* Nearest-Branch Spotlight Card (Cohesively Centered & Aligned With Pets) */}
             <div className="lg:col-span-5 xl:col-span-5">
-              <div className="rounded-2xl border-2 border-[#7CD5C7] bg-white/95 backdrop-blur-sm p-5 text-[#464B71] shadow-xl">
+              <div className="rounded-2xl border-2 border-[#7CD5C7] bg-white/95 p-5 text-[#464B71] shadow-xl backdrop-blur-sm">
                 <div className="flex items-center justify-between gap-2 border-b border-[#F2F2ED] pb-3">
-                  <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="flex min-w-0 items-center gap-2.5">
                     <img
                       src="/victorio_logo.jpg"
                       alt="Victorio ABC Emblem"
@@ -169,7 +161,7 @@ export function PublicLandingPage() {
                     />
                     <div className="min-w-0">
                       <span className="block text-[10px] font-extrabold uppercase tracking-wider text-[#118AB2]">
-                        Active Branch Spotlight
+                        You are in:
                       </span>
                       <h2 className="truncate text-base font-extrabold text-[#464B71]">
                         {selectedPublicBranch.shortName}
@@ -177,10 +169,14 @@ export function PublicLandingPage() {
                     </div>
                   </div>
 
-                  {/* Calm, Non-Interactive "Nearest" Status Pill */}
+                  {/* Calm, Non-Interactive Nearest / Distance Status Pill */}
                   <span className="pointer-events-none select-none inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[#7CD5C7]/25 px-3 py-1 text-xs font-bold text-[#2E5E59]">
                     <span className="h-2 w-2 rounded-full bg-[#1E6B60]" />
-                    <span>Nearest</span>
+                    <span>
+                      {selectedBranchDistanceKm !== null
+                        ? `${selectedBranchDistanceKm} km away`
+                        : 'Nearest'}
+                    </span>
                   </span>
                 </div>
 
@@ -225,7 +221,7 @@ export function PublicLandingPage() {
 
       {/* 2. Compact High-Contrast Navigation Cards to Dedicated Guide, Roadmap & Protocol Pages */}
       <section id="clinical-guides" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="rounded-3xl border border-[#DDDCD4] bg-white/90 backdrop-blur-[2px] p-6 shadow-sm sm:p-8">
+        <div className="rounded-3xl border border-[#DDDCD4] bg-white/90 p-6 shadow-sm backdrop-blur-[2px] sm:p-8">
           <div className="flex flex-wrap items-end justify-between gap-2">
             <div>
               <span className="rounded-full bg-[#7CD5C7]/40 px-3 py-1 text-xs font-extrabold uppercase tracking-wider text-[#464B71]">
@@ -282,13 +278,13 @@ export function PublicLandingPage() {
       </section>
 
       {/* 3. Brief Clinic Highlights & Page Directory */}
-      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-5">
+      <section className="mx-auto max-w-7xl space-y-5 px-4 sm:px-6 lg:px-8">
         <div className="grid gap-4 md:grid-cols-3">
           {CLINIC_HIGHLIGHTS.map(({ title, caption, icon: Icon, to, cta }) => (
             <Link
               key={title}
               to={to}
-              className="group flex flex-col justify-between rounded-2xl border border-[#DDDCD4] bg-white/95 backdrop-blur-[2px] p-5 shadow-sm transition hover:border-[#118AB2] hover:shadow-md focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#118AB2]"
+              className="group flex flex-col justify-between rounded-2xl border border-[#DDDCD4] bg-white/95 p-5 shadow-sm backdrop-blur-[2px] transition hover:border-[#118AB2] hover:shadow-md focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#118AB2]"
             >
               <div className="flex items-start gap-3.5">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#7CD5C7]/35 text-[#464B71]">
@@ -309,7 +305,7 @@ export function PublicLandingPage() {
           ))}
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#DDDCD4] bg-white/95 backdrop-blur-[2px] px-5 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#DDDCD4] bg-white/95 px-5 py-4 backdrop-blur-[2px]">
           <span className="text-xs font-extrabold text-[#464B71]">
             Quick Directory:
           </span>

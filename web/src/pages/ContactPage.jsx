@@ -29,7 +29,14 @@ function FacebookIcon({ className = 'h-4 w-4' }) {
 }
 
 export function ContactPage() {
-  const { publicBranches, selectedPublicBranch, setSelectedBranchSlug } = useBranch();
+  const {
+    publicBranches,
+    selectedPublicBranch,
+    setSelectedBranchSlug,
+    distancesBySlug,
+    selectedBranchDistanceKm,
+    detectNearestBranch,
+  } = useBranch();
   const [areaFilter, setAreaFilter] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -72,13 +79,22 @@ export function ContactPage() {
       <div className="rounded-2xl border-2 border-[#118AB2] bg-white p-5 shadow-md">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="space-y-1">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="rounded-full bg-[#118AB2] px-2.5 py-0.5 text-[11px] font-extrabold uppercase text-white">
-                Pinned Active Branch
+                You are in: {selectedPublicBranch.shortName}
               </span>
-              <span className="text-xs font-bold text-[#464B71]/70">
-                Tenant ID: {selectedPublicBranch.serverTenantId}
-              </span>
+              {selectedBranchDistanceKm !== null && (
+                <span className="rounded-full bg-[#7CD5C7]/35 px-2.5 py-0.5 text-[11px] font-extrabold text-[#2E5E59]">
+                  {selectedBranchDistanceKm} km away
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={detectNearestBranch}
+                className="text-xs font-extrabold text-[#118AB2] underline hover:text-[#0D6E8E]"
+              >
+                Detect Nearest Branch
+              </button>
             </div>
             <h2 className="text-xl font-extrabold text-[#464B71]">
               {selectedPublicBranch.name}

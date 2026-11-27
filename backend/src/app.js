@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 
+import authRoutes from './modules/auth/auth.routes.js';
 import patientsRoutes from './modules/patients/patients.routes.js';
 import triageRoutes from './modules/triage/triage.routes.js';
 import clinicalOrdersRoutes from './modules/clinical-orders/clinical-orders.routes.js';
@@ -39,6 +40,7 @@ app.get(['/health', '/api/health', '/api/v1/health', '/v1/health'], healthHandle
 
 // Multi-tenant versioned API routes (mounted on both /api/v1 and /v1 for Vercel rewrite resilience)
 const v1Router = express.Router();
+v1Router.use('/auth', authRoutes);
 v1Router.use('/patients', patientsRoutes);
 v1Router.use('/triage', triageRoutes);
 v1Router.use('/clinical-orders', clinicalOrdersRoutes);

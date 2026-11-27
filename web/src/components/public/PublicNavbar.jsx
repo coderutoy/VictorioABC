@@ -12,10 +12,10 @@ import {
   ShieldCheck,
   Stethoscope,
   BookOpen,
+  LocateFixed,
 } from 'lucide-react';
 import { useBranch } from '../../context/BranchContext';
 import { formatPhoneDisplay } from '../../config/branches';
-import { AccessibilityToolbar } from './AccessibilityToolbar';
 
 const CLINICAL_GUIDE_ITEMS = [
   {
@@ -27,7 +27,7 @@ const CLINICAL_GUIDE_ITEMS = [
   {
     to: '/triage-guide',
     title: 'Triage Guide',
-    subtitle: 'WHO Category I–III exposure breakdown & pre-check',
+    subtitle: 'WHO Category I–III exposure breakdown & first-aid guide',
     icon: ShieldCheck,
   },
   {
@@ -48,7 +48,16 @@ const GUIDE_PATHS = ['/roadmap', '/triage-guide', '/protocols'];
 
 export function PublicNavbar() {
   const { pathname } = useLocation();
-  const { publicBranches, selectedPublicBranch, setSelectedBranchSlug } = useBranch();
+  const {
+    publicBranches,
+    selectedPublicBranch,
+    setSelectedBranchSlug,
+    selectedBranchDistanceKm,
+    distancesBySlug,
+    nearestBranchSlug,
+    geolocationStatus,
+    detectNearestBranch,
+  } = useBranch();
 
   const [branchDropdownOpen, setBranchDropdownOpen] = useState(false);
   const [guidesDropdownOpen, setGuidesDropdownOpen] = useState(false);
@@ -100,20 +109,27 @@ export function PublicNavbar() {
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-white/15 bg-[#464B71] text-white shadow-md">
-      {/* Full-Width Top Active Branch Strip */}
+      {/* Full-Width Top Branch Info Strip */}
       <div className="w-full border-b border-white/10 bg-[#343857] px-4 py-1.5 text-xs text-white/90 sm:px-6 lg:px-10 xl:px-14">
         <div className="flex w-full flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2 truncate">
             <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-[#7CD5C7]" />
             <span className="font-semibold text-[#7CD5C7]">
-              Active Branch ({selectedPublicBranch.shortName}):
+              You are in: {selectedPublicBranch.shortName}
             </span>
-            <span className="truncate text-white/85">{selectedPublicBranch.address}</span>
+            {selectedBranchDistanceKm !== null && (
+              <span className="inline-flex items-center rounded-full bg-[#7CD5C7]/20 px-2 py-0.5 text-[11px] font-bold text-[#7CD5C7]">
+                {selectedBranchDistanceKm} km away
+              </span>
+            )}
+            <span className="hidden md:inline truncate text-white/80">
+              &bull; {selectedPublicBranch.address}
+            </span>
           </div>
           <div className="flex shrink-0 items-center gap-4">
             <a
               href={`tel:${selectedPublicBranch.contactNumber}`}
-              className="inline-flex items-center gap-1 font-bold text-[#7CD5C7] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7CD5C7] rounded"
+              className="inline-flex items-center gap-1 rounded font-bold text-[#7CD5C7] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7CD5C7]"
             >
               <PhoneCall className="h-3.5 w-3.5" />
               <span>{formattedActivePhone}</span>
@@ -126,14 +142,13 @@ export function PublicNavbar() {
             >
               Directions &rarr;
             </a>
-            <AccessibilityToolbar />
           </div>
         </div>
       </div>
 
-      {/* Full-Width Main Header Row (Portal Sign In removed from header; kept on Home & Footer) */}
+      {/* Full-Width Main Header Row */}
       <div className="flex h-20 w-full items-center justify-between gap-4 px-4 sm:px-6 lg:h-24 lg:px-10 xl:px-14">
-        {/* Left Group: Circular Logo + Brand Title + Multi-Tenant Branch Switcher */}
+        {/* Left Group: Circular Logo + Brand Title + Inline "You are in:" Branch Switcher */}
         <div className="flex shrink-0 items-center gap-3 sm:gap-5">
           <Link
             to="/"
@@ -158,35 +173,32 @@ export function PublicNavbar() {
 
           <div className="hidden h-10 w-px bg-white/20 sm:block" />
 
-          {/* Multi-Tenant Branch / Server Switcher Dropdown */}
-          <div className="relative" ref={branchDropdownRef}>
+          {/* Multi-Tenant Branch / Server Switcher Dropdown with Inline "You are in:" Label */}
+          <div className="relative flex items-center gap-2.5" ref={branchDropdownRef}>
+            <span className="hidden md:inline-block text-xs font-extrabold whitespace-nowrap text-[#7CD5C7]">
+              You are in:
+            </span>
+
             <button
               type="button"
               onClick={() => setBranchDropdownOpen((prev) => !prev)}
               aria-haspopup="menu"
               aria-expanded={branchDropdownOpen}
-              aria-label="Switch active clinic branch"
-              className="flex min-h-[48px] items-center gap-2.5 rounded-xl border border-[#7CD5C7]/50 bg-[#343857]/90 px-3.5 py-1.5 text-left transition hover:border-[#7CD5C7] hover:bg-[#343857] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#118AB2]"
+              aria-label={`You are in ${selectedPublicBranch.shortName}. Switch clinic branch`}
+              className="flex min-h-[48px] items-center gap-2 rounded-xl border border-[#7CD5C7]/50 bg-[#343857]/90 px-3.5 py-2 text-left transition hover:border-[#7CD5C7] hover:bg-[#343857] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#118AB2]"
             >
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#7CD5C7]/20 text-[#7CD5C7]">
-                <MapPin className="h-4 w-4" />
-              </div>
-              <div className="hidden sm:block">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#7CD5C7]">
-                    Active Branch
-                  </span>
-                  <span className="rounded bg-white/10 px-1.5 py-0.2 text-[9px] font-semibold text-white/80">
-                    7 Locations
-                  </span>
-                </div>
-                <p className="max-w-[180px] truncate text-xs font-bold text-white xl:max-w-[230px]">
-                  {selectedPublicBranch.shortName}
-                </p>
-              </div>
-              <span className="max-w-[100px] truncate text-xs font-bold text-white sm:hidden">
-                {selectedPublicBranch.area}
+              <MapPin className="h-4 w-4 shrink-0 text-[#7CD5C7]" />
+              <span className="text-[11px] font-bold text-[#7CD5C7] md:hidden">
+                You are in:
               </span>
+              <span className="max-w-[130px] truncate text-xs font-extrabold text-white sm:max-w-[190px] xl:max-w-[230px]">
+                {selectedPublicBranch.shortName}
+              </span>
+              {selectedBranchDistanceKm !== null && (
+                <span className="hidden sm:inline-flex items-center rounded-full bg-[#7CD5C7]/25 px-2 py-0.5 text-[10px] font-extrabold text-[#7CD5C7]">
+                  {selectedBranchDistanceKm} km away
+                </span>
+              )}
               <ChevronDown
                 className={`h-4 w-4 shrink-0 text-[#7CD5C7] transition-transform ${
                   branchDropdownOpen ? 'rotate-180' : ''
@@ -198,25 +210,35 @@ export function PublicNavbar() {
               <div
                 role="menu"
                 aria-label="Select Clinic Branch"
-                className="absolute left-0 z-50 mt-2 w-80 rounded-2xl border border-[#DDDCD4] bg-white p-2 text-[#464B71] shadow-2xl sm:w-96"
+                className="absolute left-0 top-full z-50 mt-2 w-80 rounded-2xl border border-[#DDDCD4] bg-white p-2 text-[#464B71] shadow-2xl sm:w-96"
               >
                 <div className="flex items-center justify-between border-b border-[#F2F2ED] px-3 py-2">
                   <div className="flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-[#464B71]">
                     <Server className="h-3.5 w-3.5 text-[#118AB2]" />
-                    <span>Select Clinic Branch (7 Official)</span>
+                    <span>You are in: Select Branch (7)</span>
                   </div>
-                  <Link
-                    to="/contact"
-                    onClick={() => setBranchDropdownOpen(false)}
-                    className="text-[11px] font-bold text-[#118AB2] hover:underline"
+                  <button
+                    type="button"
+                    onClick={() => {
+                      detectNearestBranch();
+                      setBranchDropdownOpen(false);
+                    }}
+                    className="inline-flex items-center gap-1 rounded-lg bg-[#EAFBF8] px-2 py-1 text-[11px] font-extrabold text-[#118AB2] hover:bg-[#7CD5C7]/30"
                   >
-                    View All &rarr;
-                  </Link>
+                    <LocateFixed className="h-3 w-3" />
+                    <span>
+                      {geolocationStatus === 'detecting'
+                        ? 'Detecting...'
+                        : 'Detect Nearest Branch'}
+                    </span>
+                  </button>
                 </div>
 
                 <div className="mt-1 max-h-80 space-y-1 overflow-y-auto pr-0.5">
                   {publicBranches.map((branch) => {
                     const isSelected = branch.slug === selectedPublicBranch.slug;
+                    const isNearest = branch.slug === nearestBranchSlug;
+                    const branchDist = distancesBySlug[branch.slug];
                     const displayTel =
                       branch.displayPhone || formatPhoneDisplay(branch.contactNumber);
                     return (
@@ -232,13 +254,23 @@ export function PublicNavbar() {
                         }`}
                       >
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-1.5">
                             <p className="truncate text-xs font-extrabold text-[#464B71]">
                               {branch.shortName}
                             </p>
                             {isSelected && (
                               <span className="rounded-full bg-[#118AB2] px-2 py-0.5 text-[9px] font-bold uppercase text-white">
-                                Active
+                                Current
+                              </span>
+                            )}
+                            {isNearest && (
+                              <span className="rounded-full bg-[#7CD5C7]/35 px-2 py-0.5 text-[9px] font-extrabold uppercase text-[#2E5E59]">
+                                Nearest
+                              </span>
+                            )}
+                            {typeof branchDist === 'number' && (
+                              <span className="text-[10px] font-bold text-[#118AB2]">
+                                ({branchDist} km away)
                               </span>
                             )}
                           </div>
@@ -314,7 +346,7 @@ export function PublicNavbar() {
                 <div
                   role="menu"
                   aria-label="Clinical Guides Submenu"
-                  className="rounded-2xl border border-[#DDDCD4] bg-white p-2 text-[#464B71] shadow-2xl space-y-1"
+                  className="space-y-1 rounded-2xl border border-[#DDDCD4] bg-white p-2 text-[#464B71] shadow-2xl"
                 >
                   {CLINICAL_GUIDE_ITEMS.map(({ to, title, subtitle, icon: Icon }) => {
                     const isActiveChild = pathname === to;
@@ -376,23 +408,38 @@ export function PublicNavbar() {
       {mobileMenuOpen && (
         <div className="border-t border-white/15 bg-[#343857] px-4 pb-5 pt-3 lg:hidden">
           <div className="mb-3 rounded-xl border border-white/15 bg-[#464B71] p-3">
-            <label
-              htmlFor="mobile-branch-select"
-              className="block text-[10px] font-bold uppercase tracking-wider text-[#7CD5C7]"
-            >
-              Active Branch / Server Context
-            </label>
+            <div className="flex items-center justify-between gap-2">
+              <label
+                htmlFor="mobile-branch-select"
+                className="text-xs font-extrabold text-[#7CD5C7]"
+              >
+                You are in:
+              </label>
+              <button
+                type="button"
+                onClick={detectNearestBranch}
+                className="inline-flex items-center gap-1 rounded-lg bg-white/10 px-2.5 py-1 text-[11px] font-bold text-[#7CD5C7] hover:bg-white/20"
+              >
+                <LocateFixed className="h-3 w-3" />
+                <span>Detect Nearest Branch</span>
+              </button>
+            </div>
             <select
               id="mobile-branch-select"
               value={selectedPublicBranch.slug}
               onChange={(e) => handleSelectBranch(e.target.value)}
               className="mt-1.5 min-h-[48px] w-full rounded-lg border border-white/20 bg-[#343857] px-3 py-2 text-xs font-bold text-white focus:border-[#7CD5C7] focus:outline-none"
             >
-              {publicBranches.map((b) => (
-                <option key={b.slug} value={b.slug}>
-                  {b.shortName} ({b.displayPhone || formatPhoneDisplay(b.contactNumber)})
-                </option>
-              ))}
+              {publicBranches.map((b) => {
+                const dist = distancesBySlug[b.slug];
+                const distSuffix = typeof dist === 'number' ? ` • ${dist} km away` : '';
+                return (
+                  <option key={b.slug} value={b.slug}>
+                    {b.shortName} ({b.displayPhone || formatPhoneDisplay(b.contactNumber)}
+                    {distSuffix})
+                  </option>
+                );
+              })}
             </select>
             <p className="mt-1.5 text-[11px] text-white/80">{selectedPublicBranch.address}</p>
           </div>
@@ -428,7 +475,7 @@ export function PublicNavbar() {
             </NavLink>
 
             {/* Mobile Expandable Clinical Guides Accordion */}
-            <div className="rounded-xl border border-white/10 bg-[#464B71]/60 overflow-hidden">
+            <div className="overflow-hidden rounded-xl border border-white/10 bg-[#464B71]/60">
               <button
                 type="button"
                 onClick={() => setMobileGuidesOpen((prev) => !prev)}

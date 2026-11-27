@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Droplets,
@@ -8,12 +7,14 @@ import {
   ShieldCheck,
   Syringe,
   HeartPulse,
-  AlertTriangle,
   ArrowRight,
   PhoneCall,
   CheckCircle2,
+  Smartphone,
 } from 'lucide-react';
 import { useBranch } from '../context/BranchContext';
+import { formatPhoneDisplay } from '../config/branches';
+import { TandokWarningPopover } from '../components/public/TandokWarningPopover';
 
 const FIRST_AID_INFOGRAPHIC = [
   {
@@ -42,6 +43,7 @@ const FIRST_AID_INFOGRAPHIC = [
     icon: Ban,
     accent: 'bg-red-600 text-white',
     ring: 'border-red-300',
+    hasTandokWarning: true,
   },
   {
     step: '4',
@@ -107,15 +109,9 @@ const WHO_INFOGRAPHIC = [
 
 export function TriageGuidePage() {
   const { selectedPublicBranch } = useBranch();
-  const [animal, setAnimal] = useState('dog');
-  const [exposure, setExposure] = useState('transdermal_bleeding');
-
-  const estimatedCategory =
-    animal === 'bat' || exposure === 'transdermal_bleeding' || exposure === 'mucosa_broken'
-      ? 'III'
-      : exposure === 'intact_skin'
-        ? 'I'
-        : 'II';
+  const formattedPhone =
+    selectedPublicBranch.displayPhone ||
+    formatPhoneDisplay(selectedPublicBranch.contactNumber);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8 space-y-10">
@@ -128,10 +124,10 @@ export function TriageGuidePage() {
               <span>Emergency First-Aid &amp; WHO Classification</span>
             </span>
             <h1 className="text-2xl font-extrabold sm:text-4xl">
-              Animal Bite Triage &amp; First-Aid Guide
+              Animal Bite First-Aid &amp; WHO Category Guide
             </h1>
             <p className="text-sm text-white/85 sm:text-base">
-              Follow the 4-step immediate washing protocol and review how physicians classify exposures into WHO Categories I, II, and III.
+              Follow the 4-step immediate washing protocol and review how licensed Victorio ABC physicians classify animal bite exposures into WHO Categories I, II, and III.
             </p>
           </div>
 
@@ -154,25 +150,29 @@ export function TriageGuidePage() {
         </div>
       </div>
 
-      {/* 1. 4-Step Immediate Emergency First-Aid Infographic (Migrated from Homepage) */}
+      {/* 1. 4-Step Immediate Emergency First-Aid Infographic + Compact Tandok Warning Icon Popover */}
       <div className="rounded-3xl border border-[#DDDCD4] bg-white/95 backdrop-blur-[2px] p-6 shadow-sm sm:p-8 space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <span className="rounded-full bg-[#7CD5C7]/35 px-3 py-1 text-xs font-extrabold uppercase tracking-wider text-[#464B71]">
-              Do This Immediately
-            </span>
-            <h2 className="mt-1.5 text-xl font-extrabold text-[#464B71] sm:text-2xl">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="space-y-1.5">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <span className="rounded-full bg-[#7CD5C7]/35 px-3 py-1 text-xs font-extrabold uppercase tracking-wider text-[#464B71]">
+                Do This Immediately
+              </span>
+              {/* Compact Hover / Tap Public Health Warning Icon Trigger */}
+              <TandokWarningPopover align="left" />
+            </div>
+            <h2 className="text-xl font-extrabold text-[#464B71] sm:text-2xl">
               4-Step Immediate Animal Bite First-Aid
             </h2>
           </div>
+
           <a
             href={`tel:${selectedPublicBranch.contactNumber}`}
             className="inline-flex min-h-[48px] items-center gap-2 rounded-xl bg-[#118AB2] px-4 py-2 text-xs font-extrabold text-white"
           >
             <PhoneCall className="h-3.5 w-3.5" />
             <span>
-              Call {selectedPublicBranch.shortName}:{' '}
-              {selectedPublicBranch.displayPhone || selectedPublicBranch.contactNumber}
+              Call {selectedPublicBranch.shortName}: {formattedPhone}
             </span>
           </a>
         </div>
@@ -196,24 +196,9 @@ export function TriageGuidePage() {
             </div>
           ))}
         </div>
-
-        {/* Anti-Tandok Warning */}
-        <div className="rounded-2xl border-2 border-red-300 bg-red-50/95 p-4 text-red-900">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="mt-0.5 h-6 w-6 shrink-0 text-red-600" />
-            <div className="text-xs leading-relaxed sm:text-sm">
-              <p className="font-extrabold uppercase tracking-wide text-red-700">
-                Public Health Warning: Never Use &ldquo;Tandok&rdquo;, Garlic, or Vinegar
-              </p>
-              <p className="mt-1">
-                Traditional horn suction (<em>tandok</em>) or rubbing garlic, vinegar, or herbs onto bite wounds <strong>cannot remove or kill the rabies virus</strong>. It damages tissue, introduces tetanus spores, and causes dangerous delays in receiving life-saving Anti-Rabies Vaccine and ERIG.
-              </p>
-            </div>
-          </div>
-        </div>
       </div>
 
-      {/* 2. WHO Exposure Category I / II / III Visual Infographic (Migrated from Homepage) */}
+      {/* 2. WHO Exposure Category I / II / III Visual Educational Reference */}
       <div className="rounded-3xl border border-[#DDDCD4] bg-white/95 backdrop-blur-[2px] p-6 shadow-sm sm:p-8 space-y-6">
         <div>
           <span className="rounded-full bg-[#118AB2]/15 px-3 py-1 text-xs font-extrabold uppercase tracking-wider text-[#118AB2]">
@@ -222,6 +207,9 @@ export function TriageGuidePage() {
           <h2 className="mt-1.5 text-xl font-extrabold text-[#464B71] sm:text-2xl">
             WHO Rabies Exposure Categories I, II, and III
           </h2>
+          <p className="mt-1 text-xs text-[#464B71]/80 sm:text-sm">
+            Educational overview of World Health Organization (WHO) exposure categories evaluated by our clinic physicians during in-person consultation.
+          </p>
         </div>
 
         <div className="grid gap-5 md:grid-cols-3">
@@ -284,86 +272,32 @@ export function TriageGuidePage() {
         </div>
       </div>
 
-      {/* 3. Interactive Self-Check Advisory Estimator */}
-      <div className="rounded-3xl border border-[#DDDCD4] bg-white/95 backdrop-blur-[2px] p-6 shadow-sm sm:p-8 space-y-5">
-        <div>
-          <span className="rounded-full bg-[#7CD5C7]/35 px-3 py-1 text-xs font-extrabold uppercase tracking-wider text-[#464B71]">
-            Interactive Pre-Triage Helper
-          </span>
-          <h2 className="mt-1.5 text-xl font-extrabold text-[#464B71]">
-            Quick Advisory WHO Category Check
-          </h2>
-          <p className="text-xs text-[#464B71]/75">
-            For educational reference only — all animal bite exposures require in-person verification by a licensed Victorio ABC physician.
-          </p>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className="block text-xs font-extrabold text-[#464B71]">
-              1. Biting or Scratching Animal
-            </label>
-            <select
-              value={animal}
-              onChange={(e) => setAnimal(e.target.value)}
-              className="mt-1.5 min-h-[48px] w-full rounded-xl border border-[#DDDCD4] bg-[#F2F2ED]/60 px-3.5 py-2.5 text-xs font-bold text-[#464B71]"
-            >
-              <option value="dog">Dog (Pet or Stray)</option>
-              <option value="cat">Cat (Pet or Stray)</option>
-              <option value="bat">Bat or Wild Mammal</option>
-            </select>
+      {/* 3. Static Mobile App & Walk-In Consultation Note (No Interactive Triage or AI Scanner on Web) */}
+      <div className="flex flex-col justify-between gap-4 rounded-3xl border border-[#DDDCD4] bg-white/95 backdrop-blur-[2px] p-6 shadow-sm sm:flex-row sm:items-center sm:p-8">
+        <div className="flex items-start gap-3.5">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#7CD5C7]/35 text-[#464B71]">
+            <Smartphone className="h-6 w-6 text-[#118AB2]" />
           </div>
-
-          <div>
-            <label className="block text-xs font-extrabold text-[#464B71]">
-              2. Type of Contact or Wound
-            </label>
-            <select
-              value={exposure}
-              onChange={(e) => setExposure(e.target.value)}
-              className="mt-1.5 min-h-[48px] w-full rounded-xl border border-[#DDDCD4] bg-[#F2F2ED]/60 px-3.5 py-2.5 text-xs font-bold text-[#464B71]"
-            >
-              <option value="transdermal_bleeding">
-                Bite or Scratch with Bleeding / Deep Puncture
-              </option>
-              <option value="mucosa_broken">
-                Lick or Saliva on Broken Skin / Eyes / Mouth / Head / Hand
-              </option>
-              <option value="minor_scratch_no_bleed">
-                Minor Superficial Scratch or Nibbling Without Bleeding
-              </option>
-              <option value="intact_skin">
-                Touching / Feeding or Lick on Completely Intact Unbroken Skin
-              </option>
-            </select>
-          </div>
-        </div>
-
-        <div className="flex flex-col justify-between gap-4 rounded-2xl border-2 border-[#118AB2] bg-[#EAFBF8] p-5 sm:flex-row sm:items-center">
-          <div>
+          <div className="space-y-1">
             <span className="text-xs font-extrabold uppercase tracking-wider text-[#118AB2]">
-              Advisory Triage Estimate
+              In-Clinic Evaluation &amp; Mobile Companion
             </span>
-            <p className="mt-0.5 text-lg font-extrabold text-[#464B71]">
-              WHO Category {estimatedCategory} Exposure
-            </p>
-            <p className="mt-1 text-xs text-[#464B71]/85">
-              {estimatedCategory === 'III'
-                ? 'Requires immediate 15-minute soap washing, Day 0 Anti-Rabies Vaccine PEP, and ERIG/HRIG wound infiltration.'
-                : estimatedCategory === 'II'
-                  ? 'Requires immediate 15-minute soap washing and Day 0 Anti-Rabies Vaccine PEP initiation.'
-                  : 'Intact skin contact (Category I). Wash thoroughly with soap and water and consult a physician if uncertain.'}
+            <h2 className="text-base font-extrabold text-[#464B71] sm:text-lg">
+              Visit {selectedPublicBranch.shortName} for Official Physician Evaluation
+            </h2>
+            <p className="max-w-2xl text-xs leading-relaxed text-[#464B71]/80 sm:text-sm">
+              Every animal bite or scratch requires an in-person clinical evaluation by a licensed physician. Registered patients can also access their Digital QR Vaccination Pass, dose reminders, and mobile pre-triage companion inside the <strong>Victorio ABC Mobile App</strong>.
             </p>
           </div>
-
-          <Link
-            to="/contact"
-            className="inline-flex min-h-[48px] shrink-0 items-center justify-center gap-2 rounded-xl bg-[#118AB2] px-5 py-2.5 text-xs font-extrabold text-white"
-          >
-            <span>Visit {selectedPublicBranch.shortName}</span>
-            <ArrowRight className="h-4 w-4" />
-          </Link>
         </div>
+
+        <Link
+          to="/contact"
+          className="inline-flex min-h-[48px] shrink-0 items-center justify-center gap-2 rounded-xl bg-[#118AB2] px-5 py-2.5 text-xs font-extrabold text-white transition hover:bg-[#0D6E8E]"
+        >
+          <span>Find Nearest Branch</span>
+          <ArrowRight className="h-4 w-4" />
+        </Link>
       </div>
     </div>
   );

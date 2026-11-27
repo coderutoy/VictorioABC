@@ -149,7 +149,7 @@ export function PublicFooter() {
                     to={portalPath}
                     className="inline-flex items-center gap-1.5 font-extrabold text-[#7CD5C7] hover:underline"
                   >
-                    <span>Portal Sign In</span>
+                    <span>Sign In</span>
                     <ArrowRight className="h-3.5 w-3.5" />
                   </Link>
                 </li>

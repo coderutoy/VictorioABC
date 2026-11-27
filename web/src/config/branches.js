@@ -195,6 +195,7 @@ export const OFFICIAL_BRANCHES = [
 
 export const DEFAULT_BRANCH_SLUG = OFFICIAL_BRANCHES[0].slug;
 export const BRANCH_STORAGE_KEY = 'victorio_abc_active_branch_slug';
+export const BRANCH_MANUAL_OVERRIDE_KEY = 'victorio_abc_manual_branch_selected';
 
 export function getBranchBySlug(slug) {
   if (!slug) return OFFICIAL_BRANCHES[0];
@@ -203,4 +204,52 @@ export function getBranchBySlug(slug) {
     OFFICIAL_BRANCHES.find((b) => b.slug === normalized || b.id === normalized) ||
     OFFICIAL_BRANCHES[0]
   );
+}
+
+/**
+ * Computes the great-circle Haversine distance in kilometers between two coordinates.
+ */
+export function calculateHaversineDistanceKm(lat1, lng1, lat2, lng2) {
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const R = 6371; // Earth radius in kilometers
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) *
+      Math.cos(toRad(lat2)) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+/**
+ * Given device latitude & longitude, calculates Haversine distances to all 7 official branches
+ * and returns the closest branch along with a map of distances (rounded to 1 decimal place).
+ */
+export function findNearestOfficialBranch(latitude, longitude) {
+  if (typeof latitude !== 'number' || typeof longitude !== 'number') {
+    return null;
+  }
+
+  let nearestBranch = OFFICIAL_BRANCHES[0];
+  let minDistance = Infinity;
+  const distancesBySlug = {};
+
+  for (const branch of OFFICIAL_BRANCHES) {
+    const dist = calculateHaversineDistanceKm(latitude, longitude, branch.lat, branch.lng);
+    const rounded = Math.round(dist * 10) / 10;
+    distancesBySlug[branch.slug] = rounded;
+    if (dist < minDistance) {
+      minDistance = dist;
+      nearestBranch = branch;
+    }
+  }
+
+  return {
+    branch: nearestBranch,
+    distanceKm: Math.round(minDistance * 10) / 10,
+    distancesBySlug,
+  };
 }

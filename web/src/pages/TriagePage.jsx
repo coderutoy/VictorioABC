@@ -563,7 +563,7 @@ export function TriagePage() {
                             <div className="text-[11px] text-slate-500">
                               {item.doctor_validated_category
                                 ? 'Doctor Validated'
-                                : 'Triage / AI Suggested'}
+                                : 'Nurse Triage Preliminary'}
                             </div>
                           </div>
                         ) : (

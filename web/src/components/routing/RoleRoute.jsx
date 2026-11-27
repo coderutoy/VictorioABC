@@ -1,5 +1,5 @@
 ﻿import { Navigate, Outlet, useLocation } from 'react-router-dom';
-import { useAuth, STAFF_ROLES } from '../../context/AuthContext';
+import { useAuth, ROLES, STAFF_ROLES } from '../../context/AuthContext';
 import { Spinner } from '../ui/Spinner';
 
 export function RoleRoute({ allowedRoles = STAFF_ROLES }) {
@@ -12,6 +12,10 @@ export function RoleRoute({ allowedRoles = STAFF_ROLES }) {
         <Spinner size="lg" label="Verifying clinical session..." />
       </div>
     );
+  }
+
+  if (role === ROLES.PATIENT) {
+    return <Navigate to="/mobile-app" replace />;
   }
 
   if (!isAuthenticated) {

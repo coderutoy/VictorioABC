@@ -5,41 +5,127 @@ import {
   OFFICIAL_BRANCHES,
   DEFAULT_BRANCH_SLUG,
   BRANCH_STORAGE_KEY,
+  BRANCH_MANUAL_OVERRIDE_KEY,
   getBranchBySlug,
+  findNearestOfficialBranch,
 } from '../config/branches';
 
 const BranchContext = createContext(null);
 
-function resolveInitialBranchSlug() {
-  if (typeof window === 'undefined') return DEFAULT_BRANCH_SLUG;
+function resolveInitialBranchState() {
+  if (typeof window === 'undefined') {
+    return { slug: DEFAULT_BRANCH_SLUG, hasManualSelection: false };
+  }
   try {
     const params = new URLSearchParams(window.location.search);
     const fromQuery = params.get('branch');
     if (fromQuery) {
       const matched = getBranchBySlug(fromQuery);
       window.localStorage.setItem(BRANCH_STORAGE_KEY, matched.slug);
-      return matched.slug;
+      return { slug: matched.slug, hasManualSelection: true };
     }
+    const isManual = window.sessionStorage.getItem(BRANCH_MANUAL_OVERRIDE_KEY) === 'true';
     const fromStorage = window.localStorage.getItem(BRANCH_STORAGE_KEY);
     if (fromStorage) {
-      return getBranchBySlug(fromStorage).slug;
+      return { slug: getBranchBySlug(fromStorage).slug, hasManualSelection: isManual };
     }
   } catch {
     // Ignore storage errors
   }
-  return DEFAULT_BRANCH_SLUG;
+  return { slug: DEFAULT_BRANCH_SLUG, hasManualSelection: false };
 }
 
 export function BranchProvider({ children }) {
   const { profile, role, isAuthenticated } = useAuth();
   const [branches, setBranches] = useState(OFFICIAL_BRANCHES);
   const [selectedBranchId, setSelectedBranchId] = useState('');
-  const [selectedBranchSlug, setSelectedBranchSlugState] = useState(resolveInitialBranchSlug);
+  const [initialState] = useState(resolveInitialBranchState);
+  const [selectedBranchSlug, setSelectedBranchSlugState] = useState(initialState.slug);
+  const [hasManualSelection, setHasManualSelection] = useState(
+    initialState.hasManualSelection
+  );
   const [loadingBranches, setLoadingBranches] = useState(false);
+
+  // Geolocation state
+  const [geolocationStatus, setGeolocationStatus] = useState('idle'); // 'idle' | 'detecting' | 'detected' | 'denied' | 'unavailable'
+  const [nearestBranchSlug, setNearestBranchSlug] = useState(null);
+  const [distancesBySlug, setDistancesBySlug] = useState({});
 
   const isGlobalAdmin = role === ROLES.ADMIN;
 
-  // Sync URL ?branch=<slug> on initial load or popstate
+  const persistBranchSlug = useCallback((slug, markManual = false) => {
+    const matched = getBranchBySlug(slug);
+    setSelectedBranchSlugState(matched.slug);
+    setSelectedBranchId(matched.id);
+    if (markManual) {
+      setHasManualSelection(true);
+    }
+
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem(BRANCH_STORAGE_KEY, matched.slug);
+        if (markManual) {
+          window.sessionStorage.setItem(BRANCH_MANUAL_OVERRIDE_KEY, 'true');
+        }
+        const url = new URL(window.location.href);
+        url.searchParams.set('branch', matched.slug);
+        window.history.replaceState({}, '', url.toString());
+      } catch {
+        // Ignore URL/storage errors
+      }
+    }
+  }, []);
+
+  const setSelectedBranchSlug = useCallback(
+    (slugOrId) => {
+      persistBranchSlug(slugOrId, true);
+    },
+    [persistBranchSlug]
+  );
+
+  // Trigger device geolocation and optionally auto-switch to the nearest of the 7 branches
+  const detectNearestBranch = useCallback(
+    ({ autoSelect = true } = {}) => {
+      if (typeof window === 'undefined' || !navigator?.geolocation) {
+        setGeolocationStatus('unavailable');
+        return;
+      }
+
+      setGeolocationStatus('detecting');
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          const result = findNearestOfficialBranch(latitude, longitude);
+          if (result?.branch) {
+            setNearestBranchSlug(result.branch.slug);
+            setDistancesBySlug(result.distancesBySlug || {});
+            setGeolocationStatus('detected');
+            if (autoSelect) {
+              persistBranchSlug(result.branch.slug, false);
+            }
+          } else {
+            setGeolocationStatus('unavailable');
+          }
+        },
+        () => {
+          setGeolocationStatus('denied');
+        },
+        {
+          enableHighAccuracy: false,
+          timeout: 8000,
+          maximumAge: 300000,
+        }
+      );
+    },
+    [persistBranchSlug]
+  );
+
+  // Automatic Nearest-Branch Detection on initial load when user has not manually selected a branch
+  useEffect(() => {
+    detectNearestBranch({ autoSelect: !hasManualSelection });
+  }, [detectNearestBranch, hasManualSelection]);
+
+  // Sync URL ?branch=<slug> on popstate
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
     const handlePopState = () => {
@@ -52,23 +138,6 @@ export function BranchProvider({ children }) {
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
-
-  const setSelectedBranchSlug = useCallback((slugOrId) => {
-    const matched = getBranchBySlug(slugOrId);
-    setSelectedBranchSlugState(matched.slug);
-    setSelectedBranchId(matched.id);
-
-    if (typeof window !== 'undefined') {
-      try {
-        window.localStorage.setItem(BRANCH_STORAGE_KEY, matched.slug);
-        const url = new URL(window.location.href);
-        url.searchParams.set('branch', matched.slug);
-        window.history.replaceState({}, '', url.toString());
-      } catch {
-        // Ignore URL/storage errors
-      }
-    }
   }, []);
 
   useEffect(() => {
@@ -123,6 +192,11 @@ export function BranchProvider({ children }) {
     [selectedBranchSlug]
   );
 
+  const selectedBranchDistanceKm = useMemo(() => {
+    const dist = distancesBySlug[selectedPublicBranch.slug];
+    return typeof dist === 'number' ? dist : null;
+  }, [distancesBySlug, selectedPublicBranch.slug]);
+
   const activeBranchId = isAuthenticated
     ? isGlobalAdmin
       ? selectedBranchId || null
@@ -159,6 +233,13 @@ export function BranchProvider({ children }) {
     canSwitchBranch: !isAuthenticated || isGlobalAdmin,
     loadingBranches,
     setActiveBranchId,
+    geolocationStatus,
+    nearestBranchSlug,
+    distancesBySlug,
+    selectedBranchDistanceKm,
+    isNearestBranchSelected:
+      Boolean(nearestBranchSlug) && nearestBranchSlug === selectedPublicBranch.slug,
+    detectNearestBranch: () => detectNearestBranch({ autoSelect: true }),
   };
 
   return <BranchContext.Provider value={value}>{children}</BranchContext.Provider>;

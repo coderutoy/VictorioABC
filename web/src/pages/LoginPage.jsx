@@ -15,20 +15,21 @@ import {
   Loader2,
   HelpCircle,
 } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, ROLES } from '../context/AuthContext';
 import { useBranch } from '../context/BranchContext';
 import { formatPhoneDisplay } from '../config/branches';
+import { PagePetBackground } from '../components/PagePetBackground';
 
 const TRUST_HIGHLIGHTS = [
   {
     icon: Stethoscope,
-    title: 'DOH / WHO-Aligned Vaccination Tracking',
+    title: 'DOH / WHO-Aligned Clinical Workflow',
     detail: 'Day 0–28 PEP schedules, Category I–III clinical orders, and cold-chain FEFO logs.',
   },
   {
     icon: Lock,
-    title: 'AES-256-GCM Encrypted Clinical Records',
-    detail: 'Compliant with RA 10173 Data Privacy Act; zero patient PHI stored in browser cookies.',
+    title: 'AES-256-GCM Encrypted Records',
+    detail: 'Compliant with RA 10173 Data Privacy Act; zero PHI stored in browser cookies.',
   },
   {
     icon: Building2,
@@ -38,8 +39,8 @@ const TRUST_HIGHLIGHTS = [
 ];
 
 export function LoginPage() {
-  const { isAuthenticated, isSupabaseConfigured, signIn } = useAuth();
-  const { publicBranches, selectedPublicBranch, setSelectedBranchSlug } = useBranch();
+  const { isAuthenticated, role, isSupabaseConfigured, signIn } = useAuth();
+  const { selectedPublicBranch, selectedBranchDistanceKm } = useBranch();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -51,6 +52,9 @@ export function LoginPage() {
   const [error, setError] = useState('');
 
   if (isAuthenticated) {
+    if (role === ROLES.PATIENT) {
+      return <Navigate to="/mobile-app" replace />;
+    }
     const rawTarget = location.state?.from?.pathname;
     const target = rawTarget && rawTarget !== '/' ? rawTarget : '/dashboard';
     return <Navigate to={target} replace />;
@@ -60,7 +64,7 @@ export function LoginPage() {
     const nextErrors = { email: '', password: '' };
     const trimmedEmail = email.trim();
     if (!trimmedEmail) {
-      nextErrors.email = 'Please enter your work or patient email address.';
+      nextErrors.email = 'Please enter your email address.';
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
       nextErrors.email = 'Please enter a valid email address (e.g., name@victorioabc.ph).';
     }
@@ -80,7 +84,11 @@ export function LoginPage() {
 
     setSubmitting(true);
     try {
-      await signIn(email.trim(), password);
+      const result = await signIn(email.trim(), password, selectedPublicBranch);
+      if (result?.requireMobileApp || result?.role === ROLES.PATIENT) {
+        navigate('/mobile-app', { replace: true });
+        return;
+      }
       const rawTarget = location.state?.from?.pathname;
       const target = rawTarget && rawTarget !== '/' ? rawTarget : '/dashboard';
       navigate(target, { replace: true });
@@ -99,13 +107,16 @@ export function LoginPage() {
     formatPhoneDisplay(selectedPublicBranch.contactNumber);
 
   return (
-    <div className="min-h-screen bg-[#F2F2ED] px-4 py-6 sm:px-6 sm:py-10 lg:flex lg:items-center lg:justify-center">
-      <div className="mx-auto w-full max-w-5xl space-y-4">
+    <div className="relative min-h-screen bg-[#F2F2ED] px-4 py-6 text-[#464B71] sm:px-6 sm:py-10 lg:flex lg:items-center lg:justify-center">
+      {/* Subtle Dogs & Cats Background Design Behind the Login Layout */}
+      <PagePetBackground />
+
+      <div className="relative z-10 mx-auto w-full max-w-5xl space-y-4">
         {/* Top Back to Home Navigation Bar */}
         <div className="flex flex-wrap items-center justify-between gap-2">
           <Link
             to="/"
-            className="inline-flex min-h-[44px] items-center gap-2 rounded-xl px-3 py-1.5 text-xs font-extrabold text-[#464B71] transition hover:bg-white hover:text-[#118AB2] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#118AB2]"
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-white/85 px-3.5 py-1.5 text-xs font-extrabold text-[#464B71] shadow-xs transition hover:bg-white hover:text-[#118AB2] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#118AB2]"
           >
             <ArrowLeft className="h-4 w-4" />
             <span>Back to Home</span>
@@ -113,7 +124,7 @@ export function LoginPage() {
 
           <Link
             to="/privacy-policy"
-            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold text-[#464B71]/80 hover:text-[#118AB2] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#118AB2]"
+            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl bg-white/85 px-3.5 py-1.5 text-xs font-bold text-[#464B71]/90 shadow-xs hover:bg-white hover:text-[#118AB2] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#118AB2]"
           >
             <ShieldCheck className="h-4 w-4 text-[#118AB2]" />
             <span>RA 10173 Healthcare Privacy Policy</span>
@@ -133,14 +144,14 @@ export function LoginPage() {
                 Victorio Animal Bite Center
               </p>
               <p className="text-xs font-semibold text-[#7CD5C7]">
-                Patient &amp; Clinical Portal • {selectedPublicBranch.shortName}
+                Sign In &bull; You are in: {selectedPublicBranch.shortName}
               </p>
             </div>
           </div>
         </div>
 
-        {/* Main 2-Column Split Clinical Container */}
-        <div className="overflow-hidden rounded-3xl border border-[#DDDCD4] bg-white shadow-xl lg:grid lg:grid-cols-12">
+        {/* Main 2-Column Split Container */}
+        <div className="overflow-hidden rounded-3xl border border-[#DDDCD4] bg-white/95 shadow-xl backdrop-blur-xs lg:grid lg:grid-cols-12">
           {/* Left Brand & Trust Panel (Desktop lg+) */}
           <div className="relative hidden overflow-hidden bg-[#464B71] p-8 text-white lg:col-span-5 lg:flex lg:flex-col lg:justify-between xl:p-10">
             {/* Subtle Decorative Pet Pattern Silhouette at Low Opacity */}
@@ -164,27 +175,29 @@ export function LoginPage() {
                 </div>
                 <div>
                   <span className="inline-block rounded-full bg-[#7CD5C7]/25 px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-[#7CD5C7]">
-                    Multi-Branch EMR
+                    7-Branch Network
                   </span>
                   <h2 className="mt-1 text-xl font-extrabold leading-tight text-white">
                     Victorio Animal Bite Center
                   </h2>
                   <p className="text-xs font-semibold text-[#7CD5C7]">
-                    Patient &amp; Clinical Portal
+                    Sign In
                   </p>
                 </div>
               </div>
 
-              {/* Active Branch Pill & Server Context */}
-              <div className="rounded-2xl border border-white/15 bg-[#343857]/90 p-4 space-y-2">
+              {/* Active Branch Context (Read-Only from Geolocation / BranchContext) */}
+              <div className="space-y-2 rounded-2xl border border-white/15 bg-[#343857]/90 p-4">
                 <div className="flex items-center justify-between gap-2">
                   <span className="inline-flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wider text-[#7CD5C7]">
                     <MapPin className="h-3.5 w-3.5" />
-                    <span>Connected Branch Server</span>
+                    <span>You are in:</span>
                   </span>
-                  <span className="rounded-full bg-[#118AB2] px-2 py-0.5 text-[10px] font-bold text-white">
-                    {selectedPublicBranch.serverTenantId}
-                  </span>
+                  {selectedBranchDistanceKm !== null && (
+                    <span className="rounded-full bg-[#7CD5C7]/25 px-2 py-0.5 text-[10px] font-bold text-[#7CD5C7]">
+                      {selectedBranchDistanceKm} km away
+                    </span>
+                  )}
                 </div>
                 <p className="text-sm font-extrabold text-white">
                   {selectedPublicBranch.shortName}
@@ -218,50 +231,26 @@ export function LoginPage() {
             </div>
           </div>
 
-          {/* Right Authentication Card */}
+          {/* Right Authentication Card (No manual branch selector dropdown) */}
           <div className="p-6 sm:p-8 lg:col-span-7 xl:p-10">
             <div className="space-y-1.5">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#7CD5C7]/30 px-3 py-0.5 text-xs font-extrabold text-[#464B71]">
-                <Lock className="h-3.5 w-3.5 text-[#118AB2]" />
-                <span>Secure Healthcare Sign In</span>
-              </span>
-              <h1 className="text-2xl font-extrabold text-[#464B71] sm:text-3xl">
-                Sign In to Your Account
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#7CD5C7]/30 px-3 py-0.5 text-xs font-extrabold text-[#464B71]">
+                  <Lock className="h-3.5 w-3.5 text-[#118AB2]" />
+                  <span>Victorio Animal Bite Center</span>
+                </span>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#F2F2ED] px-3 py-1 text-xs font-extrabold text-[#464B71] ring-1 ring-[#DDDCD4]">
+                  <MapPin className="h-3.5 w-3.5 text-[#118AB2]" />
+                  <span>You are in: {selectedPublicBranch.shortName}</span>
+                </span>
+              </div>
+              <h1 className="pt-1 text-2xl font-extrabold text-[#464B71] sm:text-3xl">
+                Sign In
               </h1>
               <p className="text-xs text-[#464B71]/80 sm:text-sm">
-                Access clinical triage, WHO Category I–III orders, and PEP vaccination records.
+                Enter your account credentials to sign in at{' '}
+                <strong className="text-[#464B71]">{selectedPublicBranch.shortName}</strong>.
               </p>
-            </div>
-
-            {/* Active Branch Switcher Control */}
-            <div className="mt-5 rounded-2xl border border-[#DDDCD4] bg-[#F2F2ED]/70 p-3.5">
-              <label
-                htmlFor="login-branch-select"
-                className="flex items-center justify-between text-xs font-extrabold text-[#464B71]"
-              >
-                <span className="flex items-center gap-1.5">
-                  <MapPin className="h-3.5 w-3.5 text-[#118AB2]" />
-                  <span>Active Clinic Branch</span>
-                </span>
-                <Link
-                  to="/contact"
-                  className="text-[11px] font-bold text-[#118AB2] hover:underline"
-                >
-                  All 7 Branches &rarr;
-                </Link>
-              </label>
-              <select
-                id="login-branch-select"
-                value={selectedPublicBranch.slug}
-                onChange={(e) => setSelectedBranchSlug(e.target.value)}
-                className="mt-1.5 min-h-[48px] w-full rounded-xl border border-[#DDDCD4] bg-white px-3.5 py-2 text-xs font-extrabold text-[#464B71] focus:border-[#118AB2] focus:outline-none focus:ring-4 focus:ring-[#118AB2]/25"
-              >
-                {publicBranches.map((b) => (
-                  <option key={b.slug} value={b.slug}>
-                    {b.shortName} — {b.displayPhone || formatPhoneDisplay(b.contactNumber)}
-                  </option>
-                ))}
-              </select>
             </div>
 
             {!isSupabaseConfigured && (
@@ -305,7 +294,7 @@ export function LoginPage() {
                     type="email"
                     autoComplete="email"
                     required
-                    placeholder="doctor.main@victorioabc.ph"
+                    placeholder="name@victorioabc.ph"
                     value={email}
                     onChange={(e) => {
                       setEmail(e.target.value);
@@ -313,7 +302,7 @@ export function LoginPage() {
                     }}
                     aria-invalid={Boolean(fieldErrors.email)}
                     aria-describedby={fieldErrors.email ? 'email-error' : undefined}
-                    className={`min-h-[48px] w-full rounded-xl border bg-white py-2.5 pl-11 pr-4 text-sm font-semibold text-[#464B71] placeholder-[#464B71]/45 shadow-sm transition focus:outline-none focus:ring-4 ${
+                    className={`min-h-[48px] w-full rounded-xl border bg-white py-2.5 pl-11 pr-4 text-sm font-semibold text-[#464B71] placeholder-[#464B71]/45 shadow-xs transition focus:outline-none focus:ring-4 ${
                       fieldErrors.email
                         ? 'border-red-500 focus:border-red-600 focus:ring-red-200'
                         : 'border-[#DDDCD4] focus:border-[#118AB2] focus:ring-[#118AB2]/25'
@@ -352,7 +341,7 @@ export function LoginPage() {
                     }}
                     aria-invalid={Boolean(fieldErrors.password)}
                     aria-describedby={fieldErrors.password ? 'password-error' : undefined}
-                    className={`min-h-[48px] w-full rounded-xl border bg-white py-2.5 pl-11 pr-14 text-sm font-semibold text-[#464B71] placeholder-[#464B71]/45 shadow-sm transition focus:outline-none focus:ring-4 ${
+                    className={`min-h-[48px] w-full rounded-xl border bg-white py-2.5 pl-11 pr-14 text-sm font-semibold text-[#464B71] placeholder-[#464B71]/45 shadow-xs transition focus:outline-none focus:ring-4 ${
                       fieldErrors.password
                         ? 'border-red-500 focus:border-red-600 focus:ring-red-200'
                         : 'border-[#DDDCD4] focus:border-[#118AB2] focus:ring-[#118AB2]/25'
@@ -392,7 +381,7 @@ export function LoginPage() {
                 ) : (
                   <>
                     <Lock className="h-5 w-5" />
-                    <span>Sign In to Portal</span>
+                    <span>Sign In</span>
                   </>
                 )}
               </button>
@@ -403,7 +392,7 @@ export function LoginPage() {
               <div className="flex items-start gap-2">
                 <HelpCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#118AB2]" />
                 <span>
-                  Need help accessing your patient record?{' '}
+                  Need assistance?{' '}
                   <Link
                     to="/contact"
                     className="font-extrabold text-[#118AB2] underline hover:text-[#0D6E8E]"

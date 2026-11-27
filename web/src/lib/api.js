@@ -20,6 +20,9 @@ api.interceptors.request.use(async (config) => {
         ? window.localStorage.getItem(BRANCH_STORAGE_KEY) || DEFAULT_BRANCH_SLUG
         : DEFAULT_BRANCH_SLUG;
     const branchObj = getBranchBySlug(activeSlug);
+    if (branchObj?.id) {
+      config.headers['X-Branch-Id'] = branchObj.id;
+    }
     if (branchObj?.slug) {
       config.headers['X-Branch-Slug'] = branchObj.slug;
       config.headers['X-Server-Tenant-Id'] = branchObj.serverTenantId;

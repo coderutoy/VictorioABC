@@ -1,5 +1,11 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { api } from '../lib/api';
+import {
+  BRANCH_STORAGE_KEY,
+  DEFAULT_BRANCH_SLUG,
+  getBranchBySlug,
+} from '../config/branches';
 
 export const ROLES = Object.freeze({
   PATIENT: 'patient',
@@ -9,6 +15,35 @@ export const ROLES = Object.freeze({
 });
 
 export const STAFF_ROLES = [ROLES.NURSE, ROLES.DOCTOR, ROLES.ADMIN];
+
+export const CROSS_BRANCH_DENIED_MESSAGE =
+  'Access denied: Your account is assigned to a different branch and cannot sign in from this branch location.';
+
+function verifyClientSideBranchMatch(profile, activeBranch) {
+  if (!profile || !activeBranch) return;
+  const role = String(profile.role || 'patient').toLowerCase();
+  const assignedBranchId = profile.branch_id
+    ? String(profile.branch_id).trim().toLowerCase()
+    : null;
+  const activeBranchId = activeBranch.id
+    ? String(activeBranch.id).trim().toLowerCase()
+    : null;
+
+  const isSuperAdmin =
+    Boolean(profile.super_admin) || (role === ROLES.ADMIN && !assignedBranchId);
+  const isBranchBoundStaff =
+    role === ROLES.DOCTOR ||
+    role === ROLES.NURSE ||
+    (role === ROLES.ADMIN && !isSuperAdmin);
+
+  if (isBranchBoundStaff) {
+    if (!assignedBranchId || !activeBranchId || assignedBranchId !== activeBranchId) {
+      throw new Error(CROSS_BRANCH_DENIED_MESSAGE);
+    }
+  } else if (assignedBranchId && activeBranchId && assignedBranchId !== activeBranchId) {
+    throw new Error(CROSS_BRANCH_DENIED_MESSAGE);
+  }
+}
 
 const AuthContext = createContext(null);
 
@@ -80,10 +115,21 @@ export function AuthProvider({ children }) {
         } = await supabase.auth.getSession();
 
         if (!isMounted) return;
-        setSession(initialSession);
 
         if (initialSession?.user?.id) {
-          await fetchProfile(initialSession.user.id);
+          const loadedProfile = await fetchProfile(initialSession.user);
+          // Block patient role from holding an active web clinical dashboard session
+          if (loadedProfile?.role === ROLES.PATIENT) {
+            await supabase.auth.signOut();
+            if (isMounted) {
+              setSession(null);
+              setProfile(null);
+            }
+          } else if (isMounted) {
+            setSession(initialSession);
+          }
+        } else {
+          setSession(null);
         }
       } finally {
         if (isMounted) setLoading(false);
@@ -97,10 +143,14 @@ export function AuthProvider({ children }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
-      setSession(nextSession);
       if (nextSession?.user?.id) {
-        await fetchProfile(nextSession.user.id);
+        const loadedProfile = await fetchProfile(nextSession.user);
+        if (loadedProfile?.role === ROLES.PATIENT) {
+          return;
+        }
+        setSession(nextSession);
       } else {
+        setSession(null);
         setProfile(null);
       }
     });
@@ -111,17 +161,127 @@ export function AuthProvider({ children }) {
     };
   }, [fetchProfile]);
 
-  const signIn = async (email, password) => {
+  const signIn = async (email, password, activeBranchArg) => {
     setAuthError(null);
+
+    const activeBranch =
+      activeBranchArg ||
+      getBranchBySlug(
+        typeof window !== 'undefined'
+          ? window.localStorage.getItem(BRANCH_STORAGE_KEY) || DEFAULT_BRANCH_SLUG
+          : DEFAULT_BRANCH_SLUG
+      );
+
+    // 1. Primary path: authenticate via backend /api/v1/auth/login which enforces HTTP 403 branch lock
+    try {
+      const res = await api.post('/auth/login', {
+        email,
+        password,
+        branch_id: activeBranch?.id,
+        branch_slug: activeBranch?.slug,
+      });
+
+      const payload = res.data?.data || {};
+      const resolvedProfile = payload.profile;
+      const resolvedRole = String(
+        payload.role || resolvedProfile?.role || 'patient'
+      ).toLowerCase();
+
+      // Double-check branch match on the client as well
+      verifyClientSideBranchMatch(resolvedProfile, activeBranch);
+
+      // Patient role: do NOT establish a web clinical session; redirect to Mobile App Download screen
+      if (resolvedRole === ROLES.PATIENT || payload.require_mobile_app) {
+        await supabase.auth.signOut();
+        setSession(null);
+        setProfile(null);
+        return {
+          role: ROLES.PATIENT,
+          profile: resolvedProfile,
+          requireMobileApp: true,
+        };
+      }
+
+      if (payload.session?.access_token && payload.session?.refresh_token) {
+        await supabase.auth.setSession({
+          access_token: payload.session.access_token,
+          refresh_token: payload.session.refresh_token,
+        });
+      }
+
+      setSession(payload.session);
+      setProfile(resolvedProfile);
+      return {
+        session: payload.session,
+        user: payload.user,
+        profile: resolvedProfile,
+        role: resolvedRole,
+        requireMobileApp: false,
+      };
+    } catch (err) {
+      // If backend responded with an explicit HTTP status (e.g., 401 or 403 Forbidden), enforce it immediately
+      if (err?.response) {
+        await supabase.auth.signOut();
+        setSession(null);
+        setProfile(null);
+        const msg =
+          err.response.data?.message ||
+          (err.response.status === 403
+            ? CROSS_BRANCH_DENIED_MESSAGE
+            : 'Invalid email or password.');
+        setAuthError(msg);
+        const wrapped = new Error(msg);
+        wrapped.status = err.response.status;
+        throw wrapped;
+      }
+
+      // If it was already our client-side branch mismatch error, rethrow
+      if (err?.message === CROSS_BRANCH_DENIED_MESSAGE) {
+        await supabase.auth.signOut();
+        setSession(null);
+        setProfile(null);
+        setAuthError(err.message);
+        throw err;
+      }
+    }
+
+    // 2. Fallback path if backend server is offline: authenticate with Supabase & enforce branch check
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
       setAuthError(error.message);
       throw error;
     }
-    if (data.user?.id) {
-      await fetchProfile(data.user.id);
+
+    const loadedProfile = await fetchProfile(data.user);
+
+    try {
+      verifyClientSideBranchMatch(loadedProfile, activeBranch);
+    } catch (branchErr) {
+      await supabase.auth.signOut();
+      setSession(null);
+      setProfile(null);
+      setAuthError(branchErr.message);
+      throw branchErr;
     }
-    return data;
+
+    const resolvedRole = String(loadedProfile?.role || 'patient').toLowerCase();
+    if (resolvedRole === ROLES.PATIENT) {
+      await supabase.auth.signOut();
+      setSession(null);
+      setProfile(null);
+      return {
+        role: ROLES.PATIENT,
+        profile: loadedProfile,
+        requireMobileApp: true,
+      };
+    }
+
+    return {
+      ...data,
+      profile: loadedProfile,
+      role: resolvedRole,
+      requireMobileApp: false,
+    };
   };
 
   const signOut = async () => {
@@ -137,7 +297,12 @@ export function AuthProvider({ children }) {
     role: profile?.role ?? null,
     loading,
     authError,
-    isAuthenticated: Boolean(session && profile && profile.is_active),
+    isAuthenticated: Boolean(
+      session &&
+        profile &&
+        profile.is_active &&
+        STAFF_ROLES.includes(profile.role)
+    ),
     isSupabaseConfigured,
     signIn,
     signOut,
