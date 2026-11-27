@@ -101,6 +101,26 @@ export function PublicFooter() {
                   </Link>
                 </li>
                 <li>
+                  <Link to="/triage-guide" className="hover:text-[#7CD5C7] hover:underline">
+                    Triage Guide
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/roadmap" className="hover:text-[#7CD5C7] hover:underline">
+                    PEP Roadmap
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/protocols" className="hover:text-[#7CD5C7] hover:underline">
+                    Protocols
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/careers" className="hover:text-[#7CD5C7] hover:underline">
+                    Careers
+                  </Link>
+                </li>
+                <li>
                   <Link to="/faq" className="hover:text-[#7CD5C7] hover:underline">
                     FAQ
                   </Link>

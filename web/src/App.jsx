@@ -7,6 +7,10 @@ import { CookieConsentBanner } from './components/CookieConsentBanner';
 import { PublicLandingPage } from './pages/PublicLandingPage';
 import { AboutPage } from './pages/AboutPage';
 import { ServicesPage } from './pages/ServicesPage';
+import { RoadmapPage } from './pages/RoadmapPage';
+import { TriageGuidePage } from './pages/TriageGuidePage';
+import { ProtocolsPage } from './pages/ProtocolsPage';
+import { CareersPage } from './pages/CareersPage';
 import { FaqPage } from './pages/FaqPage';
 import { ContactPage } from './pages/ContactPage';
 import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
@@ -26,11 +30,15 @@ export default function App() {
   return (
     <>
       <Routes>
-        {/* Public-Facing Mobile-Responsive Website with Shared Header & Footer */}
+        {/* Public-Facing Mobile-Responsive Website with Shared Header, 3-Variant Pet Background & Footer */}
         <Route element={<PublicLayout />}>
           <Route path="/" element={<PublicLandingPage />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/services" element={<ServicesPage />} />
+          <Route path="/roadmap" element={<RoadmapPage />} />
+          <Route path="/triage-guide" element={<TriageGuidePage />} />
+          <Route path="/protocols" element={<ProtocolsPage />} />
+          <Route path="/careers" element={<CareersPage />} />
           <Route path="/faq" element={<FaqPage />} />
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />

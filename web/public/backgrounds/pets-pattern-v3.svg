@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="380" height="380" viewBox="0 0 380 380" fill="none">
+  <!-- Version 3: Diagonal Flow Dogs & Cats Duo Arrangement in Soft #7CD5C7 Mint & #464B71 Navy Tones -->
+  <!-- Diagonal Soft Paw & Bone Wave Lines -->
+  <path d="M0 190 Q95 150 190 190 T380 190" stroke="#7CD5C7" stroke-width="1.6" stroke-dasharray="8 8" opacity="0.45" />
+  <path d="M0 360 Q95 320 190 360 T380 360" stroke="#118AB2" stroke-width="1.4" stroke-dasharray="6 8" opacity="0.3" />
+
+  <!-- Top Center-Left: Victorio Emblem Dog & Cat Facing Each Other Over V-Paw Crest -->
+  <g transform="translate(36, 28)" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Dog Silhouette Facing Right -->
+    <path d="M44 74 C40 56, 44 38, 54 26 C60 36, 62 48, 58 60 C72 64, 84 74, 92 84 C102 90, 100 102, 88 106 C76 110, 66 104, 60 114 C54 126, 58 140, 66 150 C48 142, 38 124, 40 100 C40 88, 42 80, 44 74 Z" stroke="#464B71" stroke-width="2.1" fill="#464B71" fill-opacity="0.09" opacity="0.36" />
+    <!-- V Monogram Crest -->
+    <path d="M98 64 L116 112 L134 64" stroke="#118AB2" stroke-width="3.2" opacity="0.32" />
+    <!-- Cat Line Art Facing Left -->
+    <path d="M186 68 C182 54, 174 42, 164 36 C162 48, 164 58, 168 68 C156 74, 146 84, 142 96 C134 102, 136 112, 146 118 C156 122, 166 118, 174 126 C180 136, 178 146, 170 154 C186 146, 194 130, 190 112 C188 96, 188 80, 186 68 Z" stroke="#1E6B60" stroke-width="2.1" fill="#7CD5C7" fill-opacity="0.16" opacity="0.4" />
+  </g>
+
+  <!-- Bottom Right: Friendly Walking Dog & Stretching Cat Duo -->
+  <g transform="translate(178, 210)" stroke-linecap="round" stroke-linejoin="round" opacity="0.35">
+    <!-- Cat Face with Pointed Ears & Whiskers -->
+    <path d="M36 60 L28 32 L50 46 Q66 42 82 46 L104 32 L96 60 C108 74, 104 98, 84 108 C66 116, 46 110, 36 94 C28 82, 28 70, 36 60 Z" stroke="#118AB2" stroke-width="2" fill="#7CD5C7" fill-opacity="0.14" />
+    <path d="M50 72 Q56 68 60 72 M72 72 Q78 68 82 72" stroke="#464B71" stroke-width="2" />
+    <polygon points="64,82 69,82 66.5,86" fill="#464B71" />
+    <path d="M26 80 L10 76 M26 86 L8 88 M106 80 L122 76 M106 86 L124 88" stroke="#118AB2" stroke-width="1.6" />
+
+    <!-- Floppy-Eared Dog Beside Cat -->
+    <path d="M136 48 C124 48, 116 62, 120 76 C124 84, 130 80, 132 70 C134 90, 148 104, 166 102 C184 100, 192 84, 188 66 C192 76, 198 78, 200 68 C202 54, 192 44, 178 46 C164 42, 148 42, 136 48 Z" stroke="#464B71" stroke-width="2" fill="#464B71" fill-opacity="0.08" />
+    <circle cx="152" cy="68" r="2.2" fill="#464B71" />
+    <circle cx="172" cy="68" r="2.2" fill="#464B71" />
+    <ellipse cx="162" cy="78" rx="5" ry="3.5" fill="#464B71" />
+  </g>
+
+  <!-- Diagonal Paw-Print Stepping Stones -->
+  <g fill="#464B71" fill-opacity="0.14" stroke="#464B71" stroke-width="1.4" stroke-opacity="0.28">
+    <g transform="translate(52, 256) rotate(-25) scale(0.9)">
+      <ellipse cx="20" cy="28" rx="14" ry="10" />
+      <circle cx="5" cy="14" r="4.5" />
+      <circle cx="14" cy="8" r="5" />
+      <circle cx="26" cy="8" r="5" />
+      <circle cx="35" cy="14" r="4.5" />
+    </g>
+    <g transform="translate(302, 54) rotate(22) scale(0.85)">
+      <ellipse cx="20" cy="28" rx="14" ry="10" />
+      <circle cx="5" cy="14" r="4.5" />
+      <circle cx="14" cy="8" r="5" />
+      <circle cx="26" cy="8" r="5" />
+      <circle cx="35" cy="14" r="4.5" />
+    </g>
+  </g>
+</svg>

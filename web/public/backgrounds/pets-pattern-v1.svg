@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="360" viewBox="0 0 360 360" fill="none">
+  <!-- Version 1: Balanced repeating Dogs, Cats & Paw-Print motif derived from Victorio ABC Logo (#7CD5C7 & #118AB2) -->
+  <g stroke="#118AB2" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" opacity="0.38">
+    <!-- Left-facing Dog Profile (from Victorio ABC Emblem) -->
+    <path d="M88 128 C78 118, 76 100, 82 84 C74 88, 66 96, 62 104 C54 90, 56 72, 68 62 C78 72, 86 86, 92 100 C80 100, 68 106, 60 116 C56 124, 54 132, 40 138 C30 142, 32 154, 44 158 C56 162, 68 156, 76 164 C84 174, 78 192, 68 204 C86 196, 98 176, 96 152 C94 140, 90 134, 88 128 Z" fill="#118AB2" fill-opacity="0.08" />
+    <!-- Friendly Dog Collar & Tag -->
+    <path d="M58 162 Q76 168 92 158" />
+    <circle cx="74" cy="170" r="4" fill="#7CD5C7" fill-opacity="0.35" />
+  </g>
+
+  <g stroke="#2B8A7E" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" opacity="0.42">
+    <!-- Right-facing Cat Profile (from Victorio ABC Emblem) -->
+    <path d="M232 96 C238 82, 248 70, 260 64 C262 76, 260 88, 256 98 C264 90, 274 84, 282 80 C280 92, 276 102, 270 110 C284 116, 294 126, 298 138 C306 144, 308 152, 298 160 C290 166, 276 164, 266 170 C256 178, 258 194, 268 206 C250 198, 240 182, 244 164 C246 152, 254 146, 262 144" fill="#7CD5C7" fill-opacity="0.14" />
+    <!-- Cat Serene Eye & Whiskers -->
+    <path d="M276 128 Q284 130 288 135" />
+    <path d="M302 146 L318 142 M304 152 L320 152 M300 158 L316 163" />
+  </g>
+
+  <!-- Victorio Emblem 5-Toe Paw Prints -->
+  <g fill="#118AB2" fill-opacity="0.16" stroke="#118AB2" stroke-width="1.5" stroke-opacity="0.32">
+    <!-- Center Bottom Paw -->
+    <ellipse cx="176" cy="272" rx="16" ry="12" />
+    <ellipse cx="154" cy="254" rx="5.5" ry="7.5" transform="rotate(-20 154 254)" />
+    <ellipse cx="168" cy="246" rx="5.5" ry="8" transform="rotate(-6 168 246)" />
+    <ellipse cx="184" cy="246" rx="5.5" ry="8" transform="rotate(6 184 246)" />
+    <ellipse cx="198" cy="254" rx="5.5" ry="7.5" transform="rotate(20 198 254)" />
+
+    <!-- Top Center Small Paw -->
+    <g transform="translate(165, 38) scale(0.72) rotate(12)">
+      <ellipse cx="20" cy="30" rx="14" ry="10" />
+      <circle cx="4" cy="16" r="5" />
+      <circle cx="14" cy="10" r="5" />
+      <circle cx="26" cy="10" r="5" />
+      <circle cx="36" cy="16" r="5" />
+    </g>
+  </g>
+
+  <!-- Secondary Corner Cat & Dog Silhouettes for Seamless Tile Continuity -->
+  <g stroke="#464B71" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" opacity="0.24">
+    <!-- Sitting Cat Minimal Line Art (Bottom Left) -->
+    <path d="M46 318 C46 292, 56 276, 68 274 L64 256 L76 266 L86 266 L98 256 L94 274 C106 276, 114 292, 114 318 Z" fill="#7CD5C7" fill-opacity="0.1" />
+    <path d="M114 312 Q132 308 130 290" />
+    <!-- Playful Puppy Head Outline (Bottom Right) -->
+    <path d="M276 286 L268 264 L286 274 Q298 270 310 274 L328 264 L320 286 C328 296, 324 314, 308 320 C292 324, 272 316, 276 286 Z" fill="#118AB2" fill-opacity="0.07" />
+    <circle cx="290" cy="292" r="2.2" fill="#464B71" />
+    <circle cx="308" cy="292" r="2.2" fill="#464B71" />
+    <ellipse cx="299" cy="302" rx="4.5" ry="3" fill="#464B71" />
+  </g>
+</svg>

@@ -12,10 +12,14 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useBranch } from '../../context/BranchContext';
+import { AccessibilityToolbar } from './AccessibilityToolbar';
 
 const NAV_LINKS = [
   { to: '/', label: 'Home', end: true },
   { to: '/services', label: 'Services' },
+  { to: '/triage-guide', label: 'Triage Guide' },
+  { to: '/roadmap', label: 'Roadmap' },
+  { to: '/protocols', label: 'Protocols' },
   { to: '/about', label: 'About' },
   { to: '/faq', label: 'FAQ' },
   { to: '/contact', label: 'Contact' },
@@ -77,6 +81,7 @@ export function PublicNavbar() {
             >
               Directions &rarr;
             </a>
+            <AccessibilityToolbar />
           </div>
         </div>
       </div>
