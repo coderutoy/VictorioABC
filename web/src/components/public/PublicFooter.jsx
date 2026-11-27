@@ -10,7 +10,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useBranch } from '../../context/BranchContext';
 import { useCookieConsent } from '../../context/CookieConsentContext';
-import { OFFICIAL_BRANCHES } from '../../config/branches';
+import { OFFICIAL_BRANCHES, formatPhoneDisplay } from '../../config/branches';
 import { MOBILE_APP_DOWNLOAD_URL } from '../../config/appLinks';
 import { encodeQrMatrix } from '../../utils/qrEncoder';
 
@@ -183,7 +183,8 @@ export function PublicFooter() {
                   href={`tel:${selectedPublicBranch.contactNumber}`}
                   className="font-extrabold text-[#7CD5C7] hover:underline"
                 >
-                  {selectedPublicBranch.contactNumber}
+                  {selectedPublicBranch.displayPhone ||
+                    formatPhoneDisplay(selectedPublicBranch.contactNumber)}
                 </a>
               </div>
 

@@ -142,7 +142,7 @@ export function PrivacyPolicyPage() {
               Registered Legal Entity: <code className="rounded bg-white px-1.5 py-0.5 font-semibold">[Official Registered Business / Legal Entity Name]</code>
             </p>
             <p className="text-xs text-[#464B71]/80">
-              Active Branch Selected: <strong>{selectedPublicBranch.shortName}</strong> ({selectedPublicBranch.address} • {selectedPublicBranch.contactNumber})
+              Active Branch Selected: <strong>{selectedPublicBranch.shortName}</strong> ({selectedPublicBranch.address} • {selectedPublicBranch.displayPhone || selectedPublicBranch.contactNumber})
             </p>
             <p className="text-xs text-[#464B71]/80">
               Official Clinic Hotline / Email:{' '}

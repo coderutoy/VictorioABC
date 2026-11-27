@@ -7,7 +7,7 @@ VALUES
   (
     '11111111-1111-1111-1111-111111111101',
     'Victorio ABC — Baliwag, Bulacan',
-    'XV5X+MG7, Benigno S. Aquino Avenue, Baliwag, Bulacan',
+    'Benigno S. Aquino Avenue, Baliwag, Bulacan',
     'Benigno S. Aquino Ave',
     'Baliwag, Bulacan',
     '09933269641',
@@ -17,7 +17,7 @@ VALUES
   (
     '11111111-1111-1111-1111-111111111102',
     'Victorio ABC — Santa Maria, Bulacan',
-    'RXF3+GR7, Santa Maria Bypass Rd, Santa Maria, Bulacan',
+    'Santa Maria Bypass Rd, Santa Maria, Bulacan',
     'Santa Maria Bypass Rd',
     'Santa Maria, Bulacan',
     '09454378284',

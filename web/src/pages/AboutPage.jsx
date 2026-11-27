@@ -144,7 +144,7 @@ export function AboutPage() {
                 </div>
                 <div className="mt-3 flex items-center gap-1.5 text-xs font-bold text-[#118AB2]">
                   <PhoneCall className="h-3.5 w-3.5" />
-                  <span>{branch.contactNumber}</span>
+                  <span>{branch.displayPhone || branch.contactNumber}</span>
                 </div>
               </button>
             );

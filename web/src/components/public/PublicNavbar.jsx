@@ -7,15 +7,14 @@ import {
   Check,
   Menu,
   X,
-  ArrowRight,
   Server,
   CalendarClock,
   ShieldCheck,
   Stethoscope,
   BookOpen,
 } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
 import { useBranch } from '../../context/BranchContext';
+import { formatPhoneDisplay } from '../../config/branches';
 import { AccessibilityToolbar } from './AccessibilityToolbar';
 
 const CLINICAL_GUIDE_ITEMS = [
@@ -49,7 +48,6 @@ const GUIDE_PATHS = ['/roadmap', '/triage-guide', '/protocols'];
 
 export function PublicNavbar() {
   const { pathname } = useLocation();
-  const { isAuthenticated } = useAuth();
   const { publicBranches, selectedPublicBranch, setSelectedBranchSlug } = useBranch();
 
   const [branchDropdownOpen, setBranchDropdownOpen] = useState(false);
@@ -61,11 +59,9 @@ export function PublicNavbar() {
   const guidesDropdownRef = useRef(null);
 
   const isGuideRouteActive = GUIDE_PATHS.includes(pathname);
-
-  const portalPath = isAuthenticated
-    ? '/dashboard'
-    : `/login?branch=${encodeURIComponent(selectedPublicBranch.slug)}`;
-  const portalLabel = isAuthenticated ? 'Clinical Dashboard' : 'Portal Sign In';
+  const formattedActivePhone =
+    selectedPublicBranch.displayPhone ||
+    formatPhoneDisplay(selectedPublicBranch.contactNumber);
 
   useEffect(() => {
     function handleClickOutside(e) {
@@ -96,7 +92,7 @@ export function PublicNavbar() {
   };
 
   const navLinkClass = ({ isActive }) =>
-    `inline-flex min-h-[48px] items-center rounded-xl px-3.5 py-2 text-sm font-bold whitespace-nowrap transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#118AB2] ${
+    `inline-flex min-h-[48px] items-center rounded-xl px-4 py-2 text-sm font-bold whitespace-nowrap transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#118AB2] ${
       isActive
         ? 'bg-white/15 text-[#7CD5C7]'
         : 'text-white/90 hover:bg-white/10 hover:text-[#7CD5C7]'
@@ -120,7 +116,7 @@ export function PublicNavbar() {
               className="inline-flex items-center gap-1 font-bold text-[#7CD5C7] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7CD5C7] rounded"
             >
               <PhoneCall className="h-3.5 w-3.5" />
-              <span>{selectedPublicBranch.contactNumber}</span>
+              <span>{formattedActivePhone}</span>
             </a>
             <a
               href={selectedPublicBranch.mapsUrl}
@@ -135,7 +131,7 @@ export function PublicNavbar() {
         </div>
       </div>
 
-      {/* Full-Width Main Header Row (w-full, no narrow max-w-* wrapper) */}
+      {/* Full-Width Main Header Row (Portal Sign In removed from header; kept on Home & Footer) */}
       <div className="flex h-20 w-full items-center justify-between gap-4 px-4 sm:px-6 lg:h-24 lg:px-10 xl:px-14">
         {/* Left Group: Circular Logo + Brand Title + Multi-Tenant Branch Switcher */}
         <div className="flex shrink-0 items-center gap-3 sm:gap-5">
@@ -170,7 +166,7 @@ export function PublicNavbar() {
               aria-haspopup="menu"
               aria-expanded={branchDropdownOpen}
               aria-label="Switch active clinic branch"
-              className="flex min-h-[48px] items-center gap-2.5 rounded-xl border border-[#7CD5C7]/50 bg-[#343857]/90 px-3 py-1.5 text-left transition hover:border-[#7CD5C7] hover:bg-[#343857] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#118AB2]"
+              className="flex min-h-[48px] items-center gap-2.5 rounded-xl border border-[#7CD5C7]/50 bg-[#343857]/90 px-3.5 py-1.5 text-left transition hover:border-[#7CD5C7] hover:bg-[#343857] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#118AB2]"
             >
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#7CD5C7]/20 text-[#7CD5C7]">
                 <MapPin className="h-4 w-4" />
@@ -184,7 +180,7 @@ export function PublicNavbar() {
                     7 Locations
                   </span>
                 </div>
-                <p className="max-w-[165px] truncate text-xs font-bold text-white xl:max-w-[215px]">
+                <p className="max-w-[180px] truncate text-xs font-bold text-white xl:max-w-[230px]">
                   {selectedPublicBranch.shortName}
                 </p>
               </div>
@@ -221,6 +217,8 @@ export function PublicNavbar() {
                 <div className="mt-1 max-h-80 space-y-1 overflow-y-auto pr-0.5">
                   {publicBranches.map((branch) => {
                     const isSelected = branch.slug === selectedPublicBranch.slug;
+                    const displayTel =
+                      branch.displayPhone || formatPhoneDisplay(branch.contactNumber);
                     return (
                       <button
                         key={branch.slug}
@@ -248,7 +246,7 @@ export function PublicNavbar() {
                             {branch.address}
                           </p>
                           <p className="mt-0.5 text-[11px] font-bold text-[#118AB2]">
-                            Tel: {branch.contactNumber}
+                            Tel: {displayTel}
                           </p>
                         </div>
                         <div className="mt-1 shrink-0">
@@ -269,108 +267,98 @@ export function PublicNavbar() {
           </div>
         </div>
 
-        {/* Center/Right Group: Clean Uncluttered Navigation + Clinical Guides Dropdown + Portal Sign In */}
-        <div className="hidden items-center gap-2 xl:gap-4 lg:flex">
-          <nav
-            aria-label="Primary Public Navigation"
-            className="flex items-center gap-1 xl:gap-1.5"
+        {/* Right Group: Well-Spaced Navigation Links + Single Clinical Guides Dropdown */}
+        <nav
+          aria-label="Primary Public Navigation"
+          className="hidden items-center gap-1.5 xl:gap-2.5 lg:flex"
+        >
+          <NavLink to="/" end className={navLinkClass}>
+            Home
+          </NavLink>
+
+          <NavLink to="/services" className={navLinkClass}>
+            Services
+          </NavLink>
+
+          {/* Single "Clinical Guides" Dropdown Menu */}
+          <div
+            className="relative"
+            ref={guidesDropdownRef}
+            onMouseEnter={() => setGuidesDropdownOpen(true)}
+            onMouseLeave={() => setGuidesDropdownOpen(false)}
           >
-            <NavLink to="/" end className={navLinkClass}>
-              Home
-            </NavLink>
-
-            <NavLink to="/services" className={navLinkClass}>
-              Services
-            </NavLink>
-
-            {/* Single "Clinical Guides" Dropdown Menu with Hover Bridge & Keyboard Support */}
-            <div
-              className="relative"
-              ref={guidesDropdownRef}
-              onMouseEnter={() => setGuidesDropdownOpen(true)}
-              onMouseLeave={() => setGuidesDropdownOpen(false)}
+            <button
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={guidesDropdownOpen}
+              onClick={() => setGuidesDropdownOpen((prev) => !prev)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') setGuidesDropdownOpen(false);
+              }}
+              className={`inline-flex min-h-[48px] items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-bold whitespace-nowrap transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#118AB2] ${
+                isGuideRouteActive || guidesDropdownOpen
+                  ? 'bg-white/15 text-[#7CD5C7]'
+                  : 'text-white/90 hover:bg-white/10 hover:text-[#7CD5C7]'
+              }`}
             >
-              <button
-                type="button"
-                aria-haspopup="menu"
-                aria-expanded={guidesDropdownOpen}
-                onClick={() => setGuidesDropdownOpen((prev) => !prev)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape') setGuidesDropdownOpen(false);
-                }}
-                className={`inline-flex min-h-[48px] items-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-bold whitespace-nowrap transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#118AB2] ${
-                  isGuideRouteActive || guidesDropdownOpen
-                    ? 'bg-white/15 text-[#7CD5C7]'
-                    : 'text-white/90 hover:bg-white/10 hover:text-[#7CD5C7]'
+              <span>Clinical Guides</span>
+              <ChevronDown
+                className={`h-4 w-4 shrink-0 text-[#7CD5C7] transition-transform ${
+                  guidesDropdownOpen ? 'rotate-180' : ''
                 }`}
-              >
-                <span>Clinical Guides</span>
-                <ChevronDown
-                  className={`h-4 w-4 shrink-0 text-[#7CD5C7] transition-transform ${
-                    guidesDropdownOpen ? 'rotate-180' : ''
-                  }`}
-                />
-              </button>
+              />
+            </button>
 
-              {guidesDropdownOpen && (
-                <div className="absolute left-0 top-full z-50 w-80 pt-2">
-                  <div
-                    role="menu"
-                    aria-label="Clinical Guides Submenu"
-                    className="rounded-2xl border border-[#DDDCD4] bg-white p-2 text-[#464B71] shadow-2xl space-y-1"
-                  >
-                    {CLINICAL_GUIDE_ITEMS.map(({ to, title, subtitle, icon: Icon }) => {
-                      const isActiveChild = pathname === to;
-                      return (
-                        <Link
-                          key={title}
-                          to={to}
-                          role="menuitem"
-                          onClick={() => setGuidesDropdownOpen(false)}
-                          className={`flex min-h-[48px] items-start gap-3 rounded-xl px-3 py-2.5 transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#118AB2] ${
-                            isActiveChild
-                              ? 'bg-[#7CD5C7]/30 text-[#464B71] ring-1 ring-[#7CD5C7]'
-                              : 'hover:bg-[#F2F2ED]'
-                          }`}
-                        >
-                          <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#118AB2]/10 text-[#118AB2]">
-                            <Icon className="h-4 w-4" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-extrabold text-[#464B71]">{title}</p>
-                            <p className="mt-0.5 text-[11px] leading-snug text-[#464B71]/75">
-                              {subtitle}
-                            </p>
-                          </div>
-                        </Link>
-                      );
-                    })}
-                  </div>
+            {guidesDropdownOpen && (
+              <div className="absolute right-0 top-full z-50 w-80 pt-2">
+                <div
+                  role="menu"
+                  aria-label="Clinical Guides Submenu"
+                  className="rounded-2xl border border-[#DDDCD4] bg-white p-2 text-[#464B71] shadow-2xl space-y-1"
+                >
+                  {CLINICAL_GUIDE_ITEMS.map(({ to, title, subtitle, icon: Icon }) => {
+                    const isActiveChild = pathname === to;
+                    return (
+                      <Link
+                        key={title}
+                        to={to}
+                        role="menuitem"
+                        onClick={() => setGuidesDropdownOpen(false)}
+                        className={`flex min-h-[48px] items-start gap-3 rounded-xl px-3 py-2.5 transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#118AB2] ${
+                          isActiveChild
+                            ? 'bg-[#7CD5C7]/30 text-[#464B71] ring-1 ring-[#7CD5C7]'
+                            : 'hover:bg-[#F2F2ED]'
+                        }`}
+                      >
+                        <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#118AB2]/10 text-[#118AB2]">
+                          <Icon className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-extrabold text-[#464B71]">{title}</p>
+                          <p className="mt-0.5 text-[11px] leading-snug text-[#464B71]/75">
+                            {subtitle}
+                          </p>
+                        </div>
+                      </Link>
+                    );
+                  })}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
+          </div>
 
-            <NavLink to="/about" className={navLinkClass}>
-              About
-            </NavLink>
+          <NavLink to="/about" className={navLinkClass}>
+            About
+          </NavLink>
 
-            <NavLink to="/faq" className={navLinkClass}>
-              FAQ
-            </NavLink>
+          <NavLink to="/faq" className={navLinkClass}>
+            FAQ
+          </NavLink>
 
-            <NavLink to="/contact" className={navLinkClass}>
-              Contact
-            </NavLink>
-          </nav>
-
-          <Link
-            to={portalPath}
-            className="inline-flex min-h-[48px] shrink-0 items-center gap-2 rounded-xl bg-[#118AB2] px-5 py-2.5 text-sm font-extrabold text-white whitespace-nowrap shadow-sm transition hover:bg-[#0D6E8E] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#7CD5C7]"
-          >
-            <span>{portalLabel}</span>
-            <ArrowRight className="h-4 w-4" />
-          </Link>
-        </div>
+          <NavLink to="/contact" className={navLinkClass}>
+            Contact
+          </NavLink>
+        </nav>
 
         {/* Mobile Menu Trigger */}
         <button
@@ -384,7 +372,7 @@ export function PublicNavbar() {
         </button>
       </div>
 
-      {/* Mobile Navigation Drawer with Expandable "Clinical Guides" Accordion */}
+      {/* Mobile Navigation Drawer */}
       {mobileMenuOpen && (
         <div className="border-t border-white/15 bg-[#343857] px-4 pb-5 pt-3 lg:hidden">
           <div className="mb-3 rounded-xl border border-white/15 bg-[#464B71] p-3">
@@ -402,7 +390,7 @@ export function PublicNavbar() {
             >
               {publicBranches.map((b) => (
                 <option key={b.slug} value={b.slug}>
-                  {b.shortName} ({b.contactNumber})
+                  {b.shortName} ({b.displayPhone || formatPhoneDisplay(b.contactNumber)})
                 </option>
               ))}
             </select>
@@ -500,22 +488,14 @@ export function PublicNavbar() {
             ))}
           </nav>
 
-          <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
+          <div className="mt-4">
             <a
               href={`tel:${selectedPublicBranch.contactNumber}`}
-              className="flex min-h-[48px] items-center justify-center gap-2 rounded-xl border border-[#7CD5C7] bg-white/10 px-4 py-2.5 text-sm font-bold text-[#7CD5C7]"
+              className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl border border-[#7CD5C7] bg-white/10 px-4 py-2.5 text-sm font-bold text-[#7CD5C7]"
             >
               <PhoneCall className="h-4 w-4" />
-              <span>Call {selectedPublicBranch.area}</span>
+              <span>Call {selectedPublicBranch.shortName} ({formattedActivePhone})</span>
             </a>
-            <Link
-              to={portalPath}
-              onClick={() => setMobileMenuOpen(false)}
-              className="flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-[#118AB2] px-4 py-2.5 text-sm font-extrabold text-white"
-            >
-              <span>{portalLabel}</span>
-              <ArrowRight className="h-4 w-4" />
-            </Link>
           </div>
         </div>
       )}

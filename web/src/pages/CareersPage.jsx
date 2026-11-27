@@ -123,7 +123,9 @@ export function CareersPage() {
               className="inline-flex items-center gap-1 rounded-lg bg-[#F2F2ED] px-2.5 py-1 text-xs font-bold text-[#464B71]"
             >
               <MapPin className="h-3 w-3 text-[#118AB2]" />
-              <span>{b.shortName}: {b.contactNumber}</span>
+              <span>
+                {b.shortName}: {b.displayPhone || b.contactNumber}
+              </span>
             </span>
           ))}
         </div>

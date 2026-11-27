@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   MapPin,
@@ -12,34 +11,13 @@ import {
   Stethoscope,
   CalendarClock,
   CheckCircle2,
-  Navigation,
   HelpCircle,
   Briefcase,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useBranch } from '../context/BranchContext';
 import { useAccessibility } from '../context/AccessibilityContext';
-
-const BRANCH_COORDS = {
-  baliwag: { lat: 14.9547, lng: 120.8969 },
-  'santa-maria': { lat: 14.8181, lng: 120.9563 },
-  pandi: { lat: 14.8658, lng: 120.9571 },
-  drt: { lat: 14.9964, lng: 121.0853 },
-  'meycauayan-camalig': { lat: 14.7568, lng: 120.9942 },
-  'meycauayan-poblacion': { lat: 14.7369, lng: 120.9606 },
-  'cefels-caloocan': { lat: 14.7566, lng: 121.0445 },
-};
-
-function haversineKm(lat1, lon1, lat2, lon2) {
-  const toRad = (deg) => (deg * Math.PI) / 180;
-  const R = 6371;
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
+import { formatPhoneDisplay } from '../config/branches';
 
 const DEDICATED_GUIDE_CARDS = [
   {
@@ -103,51 +81,33 @@ const CLINIC_HIGHLIGHTS = [
 
 export function PublicLandingPage() {
   const { isAuthenticated } = useAuth();
-  const { publicBranches, selectedPublicBranch, setSelectedBranchSlug } = useBranch();
+  const { selectedPublicBranch } = useBranch();
   const { highContrast } = useAccessibility();
-  const [nearestDistanceKm, setNearestDistanceKm] = useState(null);
-  const [locating, setLocating] = useState(false);
 
   const portalPath = isAuthenticated
     ? '/dashboard'
     : `/login?branch=${encodeURIComponent(selectedPublicBranch.slug)}`;
 
-  // Explicit user-triggered geolocation (never fires automatically on page load)
-  const handleFindNearestBranch = () => {
-    if (typeof navigator === 'undefined' || !navigator.geolocation) return;
-    setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const { latitude, longitude } = pos.coords;
-        let bestSlug = selectedPublicBranch.slug;
-        let bestDist = Infinity;
-
-        for (const branch of publicBranches) {
-          const coords = BRANCH_COORDS[branch.slug];
-          if (coords) {
-            const dist = haversineKm(latitude, longitude, coords.lat, coords.lng);
-            if (dist < bestDist) {
-              bestDist = dist;
-              bestSlug = branch.slug;
-            }
-          }
-        }
-
-        setSelectedBranchSlug(bestSlug);
-        setNearestDistanceKm(bestDist.toFixed(1));
-        setLocating(false);
-      },
-      () => {
-        setLocating(false);
-      },
-      { timeout: 8000 }
-    );
-  };
+  const formattedPhone =
+    selectedPublicBranch.displayPhone ||
+    formatPhoneDisplay(selectedPublicBranch.contactNumber);
 
   return (
     <div className="space-y-10 pb-14">
-      {/* 1. Dynamic Hero Banner with Flush Bottom-Right Two Dogs & Two Cats Decorative SVG */}
-      <section className="relative overflow-hidden bg-[#464B71] py-10 text-white shadow-md sm:py-14 lg:py-16">
+      {/* 1. Compact, Balanced Hero / Branch Spotlight Section */}
+      <section className="relative overflow-hidden bg-[#464B71] py-8 text-white shadow-md sm:py-10 lg:py-12">
+        {/* Soft Radial Glow / Light Organic Contrast Backdrop Directly Behind the Bottom-Right Pets */}
+        {!highContrast && (
+          <div
+            aria-hidden="true"
+            className="pointer-events-none select-none absolute -bottom-12 -right-12 z-0 h-[240px] w-[280px] rounded-full blur-2xl sm:h-[320px] sm:w-[380px] lg:h-[440px] lg:w-[540px]"
+            style={{
+              background:
+                'radial-gradient(circle at 65% 65%, rgba(242, 242, 237, 0.48) 0%, rgba(124, 213, 199, 0.28) 44%, rgba(70, 75, 113, 0) 76%)',
+            }}
+          />
+        )}
+
         {/* Decorative Bottom-Right Two Dogs & Two Cats Vector Cutout SVG */}
         <img
           src="/images/hero-pets.svg"
@@ -155,21 +115,22 @@ export function PublicLandingPage() {
           aria-hidden="true"
           loading="eager"
           decoding="async"
-          className={`pointer-events-none select-none absolute bottom-0 right-0 z-0 h-auto w-[200px] sm:w-[270px] lg:w-[440px] xl:w-[540px] max-w-[44vw] bg-transparent object-contain object-right-bottom transition-opacity duration-300 ${
-            highContrast ? 'opacity-10' : 'opacity-20 sm:opacity-35 lg:opacity-90'
+          className={`pointer-events-none select-none absolute bottom-0 right-0 z-0 h-auto w-[190px] sm:w-[260px] lg:w-[400px] xl:w-[480px] max-w-[42vw] bg-transparent object-contain object-right-bottom transition-opacity duration-300 ${
+            highContrast ? 'opacity-10' : 'opacity-20 sm:opacity-35 lg:opacity-95'
           }`}
         />
 
-        {/* Foreground Content Above Decorative SVG */}
+        {/* Foreground Content Centered & Cohesively Aligned With Branch Card and Pets */}
         <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="grid items-start gap-8 lg:grid-cols-12">
-            <div className="space-y-5 lg:col-span-7">
+          <div className="grid items-center gap-6 lg:grid-cols-12 lg:gap-8">
+            {/* Hero Headline & Primary CTAs */}
+            <div className="space-y-4 lg:col-span-6">
               <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3.5 py-1 text-xs font-extrabold text-[#7CD5C7] ring-1 ring-[#7CD5C7]/40">
                 <ShieldCheck className="h-4 w-4" />
                 <span>7 Official Branches • Bulacan &amp; Metro Manila</span>
               </div>
 
-              <h1 className="text-3xl font-extrabold leading-tight tracking-tight text-white sm:text-4xl lg:text-5xl">
+              <h1 className="text-3xl font-extrabold leading-tight tracking-tight text-white sm:text-4xl lg:text-[42px]">
                 Compassionate, WHO-Guided{' '}
                 <span className="text-[#7CD5C7]">Animal Bite &amp; Rabies Care</span>
               </h1>
@@ -196,41 +157,31 @@ export function PublicLandingPage() {
               </div>
             </div>
 
-            {/* Active Nearest-Branch Spotlight Card */}
-            <div className="lg:col-span-5 lg:mb-24 xl:mb-28">
+            {/* Active Nearest-Branch Spotlight Card (Cohesively Centered & Aligned With Pets) */}
+            <div className="lg:col-span-5 xl:col-span-5">
               <div className="rounded-2xl border-2 border-[#7CD5C7] bg-white/95 backdrop-blur-sm p-5 text-[#464B71] shadow-xl">
                 <div className="flex items-center justify-between gap-2 border-b border-[#F2F2ED] pb-3">
-                  <div className="flex items-center gap-2.5">
+                  <div className="flex items-center gap-2.5 min-w-0">
                     <img
                       src="/victorio_logo.jpg"
                       alt="Victorio ABC Emblem"
-                      className="h-12 w-12 rounded-full border-2 border-[#118AB2] object-cover"
+                      className="h-11 w-11 shrink-0 rounded-full border-2 border-[#118AB2] object-cover"
                     />
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#118AB2]">
-                          Active Branch Spotlight
-                        </span>
-                        {nearestDistanceKm && (
-                          <span className="rounded-full bg-[#7CD5C7]/40 px-2 py-0.5 text-[10px] font-extrabold text-[#464B71]">
-                            ~{nearestDistanceKm} km away
-                          </span>
-                        )}
-                      </div>
-                      <h2 className="text-base font-extrabold text-[#464B71]">
+                    <div className="min-w-0">
+                      <span className="block text-[10px] font-extrabold uppercase tracking-wider text-[#118AB2]">
+                        Active Branch Spotlight
+                      </span>
+                      <h2 className="truncate text-base font-extrabold text-[#464B71]">
                         {selectedPublicBranch.shortName}
                       </h2>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleFindNearestBranch}
-                    disabled={locating}
-                    className="inline-flex min-h-[44px] items-center gap-1 rounded-xl border border-[#DDDCD4] bg-[#F2F2ED] px-3 py-1.5 text-xs font-extrabold text-[#464B71] hover:bg-[#DDDCD4]"
-                  >
-                    <Navigation className="h-3.5 w-3.5 text-[#118AB2]" />
-                    <span>{locating ? 'Locating...' : 'Nearest'}</span>
-                  </button>
+
+                  {/* Calm, Non-Interactive "Nearest" Status Pill */}
+                  <span className="pointer-events-none select-none inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[#7CD5C7]/25 px-3 py-1 text-xs font-bold text-[#2E5E59]">
+                    <span className="h-2 w-2 rounded-full bg-[#1E6B60]" />
+                    <span>Nearest</span>
+                  </span>
                 </div>
 
                 <div className="mt-3 space-y-2 text-xs">
@@ -253,8 +204,8 @@ export function PublicLandingPage() {
                     href={`tel:${selectedPublicBranch.contactNumber}`}
                     className="flex min-h-[48px] items-center justify-center gap-1.5 rounded-xl bg-[#118AB2] px-3 py-2 text-xs font-extrabold text-white transition hover:bg-[#0D6E8E]"
                   >
-                    <PhoneCall className="h-3.5 w-3.5" />
-                    <span>Call {selectedPublicBranch.contactNumber}</span>
+                    <PhoneCall className="h-3.5 w-3.5 shrink-0" />
+                    <span>Call {formattedPhone}</span>
                   </a>
                   <a
                     href={selectedPublicBranch.mapsUrl}
@@ -262,7 +213,7 @@ export function PublicLandingPage() {
                     rel="noopener noreferrer"
                     className="flex min-h-[48px] items-center justify-center gap-1.5 rounded-xl border border-[#DDDCD4] bg-[#F2F2ED] px-3 py-2 text-xs font-extrabold text-[#464B71] transition hover:bg-[#DDDCD4]"
                   >
-                    <ExternalLink className="h-3.5 w-3.5 text-[#118AB2]" />
+                    <ExternalLink className="h-3.5 w-3.5 shrink-0 text-[#118AB2]" />
                     <span>Google Maps</span>
                   </a>
                 </div>

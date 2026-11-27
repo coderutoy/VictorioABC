@@ -8,6 +8,7 @@ import {
   Clock,
 } from 'lucide-react';
 import { useBranch } from '../context/BranchContext';
+import { formatPhoneDisplay } from '../config/branches';
 
 const AREA_FILTERS = [
   'All',
@@ -91,10 +92,14 @@ export function ContactPage() {
           <div className="flex flex-wrap items-center gap-2.5">
             <a
               href={`tel:${selectedPublicBranch.contactNumber}`}
-              className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-[#118AB2] px-4 py-2.5 text-xs font-extrabold text-white transition hover:bg-[#0D6E8E]"
+              className="inline-flex min-h-[48px] items-center gap-2 rounded-xl bg-[#118AB2] px-4 py-2.5 text-xs font-extrabold text-white transition hover:bg-[#0D6E8E]"
             >
               <PhoneCall className="h-4 w-4" />
-              <span>Call {selectedPublicBranch.contactNumber}</span>
+              <span>
+                Call{' '}
+                {selectedPublicBranch.displayPhone ||
+                  formatPhoneDisplay(selectedPublicBranch.contactNumber)}
+              </span>
             </a>
             <a
               href={selectedPublicBranch.mapsUrl}
@@ -198,7 +203,7 @@ export function ContactPage() {
                       href={`tel:${branch.contactNumber}`}
                       className="font-extrabold text-[#118AB2] hover:underline"
                     >
-                      {branch.contactNumber}
+                      {branch.displayPhone || formatPhoneDisplay(branch.contactNumber)}
                     </a>
                   </div>
                   <div className="flex items-center gap-2">

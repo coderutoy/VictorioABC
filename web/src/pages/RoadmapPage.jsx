@@ -284,10 +284,13 @@ export function RoadmapPage() {
           <div className="pt-1">
             <a
               href={`tel:${selectedPublicBranch.contactNumber}`}
-              className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-[#118AB2] px-4 py-2 text-xs font-extrabold text-white"
+              className="inline-flex min-h-[48px] items-center gap-2 rounded-xl bg-[#118AB2] px-4 py-2 text-xs font-extrabold text-white"
             >
               <PhoneCall className="h-4 w-4" />
-              <span>Call {selectedPublicBranch.shortName} ({selectedPublicBranch.contactNumber})</span>
+              <span>
+                Call {selectedPublicBranch.shortName} (
+                {selectedPublicBranch.displayPhone || selectedPublicBranch.contactNumber})
+              </span>
             </a>
           </div>
         </div>

@@ -93,10 +93,12 @@ export function ServicesPage() {
           <div className="flex flex-wrap gap-3">
             <a
               href={`tel:${selectedPublicBranch.contactNumber}`}
-              className="inline-flex min-h-[46px] items-center gap-2 rounded-xl bg-[#7CD5C7] px-5 py-2.5 text-sm font-extrabold text-[#464B71]"
+              className="inline-flex min-h-[48px] items-center gap-2 rounded-xl bg-[#7CD5C7] px-5 py-2.5 text-sm font-extrabold text-[#464B71]"
             >
               <PhoneCall className="h-4 w-4" />
-              <span>Call {selectedPublicBranch.contactNumber}</span>
+              <span>
+                Call {selectedPublicBranch.displayPhone || selectedPublicBranch.contactNumber}
+              </span>
             </a>
             <Link
               to="/contact"
