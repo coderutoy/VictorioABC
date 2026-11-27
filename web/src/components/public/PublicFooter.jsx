@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useBranch } from '../../context/BranchContext';
+import { useCookieConsent } from '../../context/CookieConsentContext';
 import { OFFICIAL_BRANCHES } from '../../config/branches';
 import { MOBILE_APP_DOWNLOAD_URL } from '../../config/appLinks';
 import { encodeQrMatrix } from '../../utils/qrEncoder';
@@ -39,6 +40,7 @@ function FacebookIcon({ className = 'h-4 w-4' }) {
 export function PublicFooter() {
   const { isAuthenticated } = useAuth();
   const { selectedPublicBranch } = useBranch();
+  const { openCookiePreferences } = useCookieConsent();
 
   const qrMatrix = useMemo(() => encodeQrMatrix(MOBILE_APP_DOWNLOAD_URL), []);
   const qrSize = qrMatrix.length;
@@ -107,6 +109,20 @@ export function PublicFooter() {
                   <Link to="/contact" className="hover:text-[#7CD5C7] hover:underline">
                     Contact Us
                   </Link>
+                </li>
+                <li>
+                  <Link to="/privacy-policy" className="hover:text-[#7CD5C7] hover:underline">
+                    Privacy Policy
+                  </Link>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    onClick={openCookiePreferences}
+                    className="text-left font-semibold text-white/90 hover:text-[#7CD5C7] hover:underline"
+                  >
+                    Cookie Preferences
+                  </button>
                 </li>
                 <li className="col-span-2 pt-1">
                   <Link
@@ -242,13 +258,23 @@ export function PublicFooter() {
           </div>
         </div>
 
-        <div className="mt-10 flex flex-col items-center justify-between gap-2 border-t border-white/15 pt-6 text-xs text-white/75 sm:flex-row">
+        <div className="mt-10 flex flex-col items-center justify-between gap-3 border-t border-white/15 pt-6 text-xs text-white/75 sm:flex-row">
           <span>
             &copy; {new Date().getFullYear()} Victorio Animal Bite Center. All rights reserved.
           </span>
-          <span>
-            7 Official Branches across Bulacan &amp; Caloocan &bull; WHO Rabies PEP Protocol
-          </span>
+          <div className="flex flex-wrap items-center gap-4">
+            <Link to="/privacy-policy" className="font-semibold text-[#7CD5C7] hover:underline">
+              Privacy Policy (RA 10173)
+            </Link>
+            <button
+              type="button"
+              onClick={openCookiePreferences}
+              className="font-semibold text-[#7CD5C7] hover:underline"
+            >
+              Cookie Preferences
+            </button>
+            <span>7 Official Branches &bull; WHO Rabies PEP</span>
+          </div>
         </div>
       </div>
     </footer>

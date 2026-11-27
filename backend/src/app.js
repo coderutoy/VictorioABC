@@ -12,10 +12,12 @@ import analyticsRoutes from './modules/analytics/analytics.routes.js';
 import branchesRoutes from './modules/branches/branches.routes.js';
 import auditRoutes from './modules/audit/audit.routes.js';
 import { notFoundHandler, errorHandler } from './middleware/error.middleware.js';
+import { enforceSecureCookiesMiddleware } from './utils/cookiePolicy.js';
 
 const app = express();
 
 app.use(helmet());
+app.use(enforceSecureCookiesMiddleware);
 app.use(
   cors({
     origin: process.env.CORS_ORIGIN || '*',
