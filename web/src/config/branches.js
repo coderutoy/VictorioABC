@@ -19,7 +19,6 @@ export function formatPhoneDisplay(phone = '') {
 
 /**
  * Builds an exact Google Maps search link from a branch's verified address / Plus Code query.
- * Uses the address text (never approximate lat,lng) so Maps pins the real clinic location.
  */
 export function buildMapsUrl(mapsQuery = '') {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapsQuery)}`;
@@ -27,14 +26,14 @@ export function buildMapsUrl(mapsQuery = '') {
 
 /**
  * Single source of truth for the 7 official Victorio Animal Bite Center branches.
- * - `address`   : clean text shown in the UI.
- * - `mapsQuery` : exact verified query used for every Google Maps / Directions link.
- * - `lat`/`lng` : used only for Haversine nearest-branch auto-detection (approximate map centroid).
+ * - `id` & `slug` both equal the canonical branch slug ('santa-maria', 'baliwag', etc.)
+ *   matching `public.branches.id` (TEXT PK) and `public.profiles.branch_id` in Supabase.
  */
 const BRANCH_DEFINITIONS = [
   {
-    id: '11111111-1111-1111-1111-111111111101',
+    id: 'baliwag',
     slug: 'baliwag',
+    legacyUuid: '11111111-1111-1111-1111-111111111101',
     name: 'Victorio ABC — Baliwag, Bulacan',
     shortName: 'Baliwag, Bulacan',
     socialLabel: 'Baliwag, Bulacan',
@@ -43,6 +42,7 @@ const BRANCH_DEFINITIONS = [
     municipality: 'Baliwag, Bulacan',
     address: '347 Benigno S. Aquino Avenue, Baliwag, Bulacan',
     mapsQuery: '347 Benigno S. Aquino Avenue, Baliwag, Bulacan',
+    phone: '09933269641',
     contactNumber: '09933269641',
     contact_number: '09933269641',
     displayPhone: '0993 326 9641',
@@ -53,8 +53,9 @@ const BRANCH_DEFINITIONS = [
     serverTenantId: 'tenant-baliwag',
   },
   {
-    id: '11111111-1111-1111-1111-111111111102',
+    id: 'santa-maria',
     slug: 'santa-maria',
+    legacyUuid: '11111111-1111-1111-1111-111111111102',
     name: 'Victorio ABC — Santa Maria, Bulacan',
     shortName: 'Santa Maria, Bulacan',
     socialLabel: 'Santa Maria, Bulacan',
@@ -63,19 +64,20 @@ const BRANCH_DEFINITIONS = [
     municipality: 'Santa Maria, Bulacan',
     address: 'Santa Maria Bypass Rd, Santa Maria, Bulacan',
     mapsQuery: 'RXF3+GR7, Santa Maria Bypass Rd, Santa Maria, Bulacan',
+    phone: '09454378284',
     contactNumber: '09454378284',
     contact_number: '09454378284',
     displayPhone: '0945 437 8284',
     facebookUrl:
       'https://www.facebook.com/profile.php?id=61590283871799&locale=lv_LV#',
-    // Decoded from Plus Code RXF3+GR7 (Santa Maria, Bulacan)
     lat: 14.8238,
     lng: 120.9545,
     serverTenantId: 'tenant-santa-maria',
   },
   {
-    id: '11111111-1111-1111-1111-111111111103',
+    id: 'pandi',
     slug: 'pandi',
+    legacyUuid: '11111111-1111-1111-1111-111111111103',
     name: 'Victorio ABC — Mapulang Lupa, Pandi',
     shortName: 'Mapulang Lupa, Pandi',
     socialLabel: 'Mapulang Lupa, Pandi',
@@ -84,6 +86,7 @@ const BRANCH_DEFINITIONS = [
     municipality: 'Pandi, Bulacan',
     address: '98 Pandi Angat Rd, Mapulang Lupa, Pandi, Bulacan',
     mapsQuery: '98 Pandi Angat Rd, Pandi, Bulacan',
+    phone: '09101909050',
     contactNumber: '09101909050',
     contact_number: '09101909050',
     displayPhone: '0910 190 9050',
@@ -94,8 +97,9 @@ const BRANCH_DEFINITIONS = [
     serverTenantId: 'tenant-pandi',
   },
   {
-    id: '11111111-1111-1111-1111-111111111104',
+    id: 'drt',
     slug: 'drt',
+    legacyUuid: '11111111-1111-1111-1111-111111111104',
     name: 'Victorio ABC — DRT, Bulacan',
     shortName: 'DRT, Bulacan',
     socialLabel: 'DRT, Bulacan',
@@ -104,6 +108,7 @@ const BRANCH_DEFINITIONS = [
     municipality: 'Doña Remedios Trinidad, Bulacan',
     address: '201 M. Valte Road, Pulong Sampalok, Doña Remedios Trinidad, Bulacan',
     mapsQuery: '201 M. Valte Road, Pulong Sampalok, Doña Remedios Trinidad, Bulacan',
+    phone: '09751861541',
     contactNumber: '09751861541',
     contact_number: '09751861541',
     displayPhone: '0975 186 1541',
@@ -114,8 +119,9 @@ const BRANCH_DEFINITIONS = [
     serverTenantId: 'tenant-drt',
   },
   {
-    id: '11111111-1111-1111-1111-111111111105',
+    id: 'meycauayan-camalig',
     slug: 'meycauayan-camalig',
+    legacyUuid: '11111111-1111-1111-1111-111111111105',
     name: 'Victorio ABC — Meycauayan, Bulacan (Camalig)',
     shortName: 'Meycauayan, Bulacan (Camalig)',
     socialLabel: 'Meycauayan, Bulacan',
@@ -124,6 +130,7 @@ const BRANCH_DEFINITIONS = [
     municipality: 'Meycauayan, Bulacan',
     address: 'Blk 63 Lot 9 El Camino Real, Camalig, Meycauayan, Bulacan',
     mapsQuery: 'Blk 63 Lot 9 El Camino Real, Camalig, Meycauayan, Bulacan',
+    phone: '09517734066',
     contactNumber: '09517734066',
     contact_number: '09517734066',
     displayPhone: '0951 773 4066',
@@ -134,8 +141,9 @@ const BRANCH_DEFINITIONS = [
     serverTenantId: 'tenant-meycauayan-camalig',
   },
   {
-    id: '11111111-1111-1111-1111-111111111106',
+    id: 'meycauayan-poblacion',
     slug: 'meycauayan-poblacion',
+    legacyUuid: '11111111-1111-1111-1111-111111111106',
     name: 'Victorio ABC — Poblacion / Calvario, Meycauayan',
     shortName: 'Poblacion / Calvario, Meycauayan',
     socialLabel: 'Poblacion, Meycauayan',
@@ -144,6 +152,7 @@ const BRANCH_DEFINITIONS = [
     municipality: 'Meycauayan, Bulacan',
     address: '009 Pacheco Street, Calvario, Meycauayan, 3020 Bulacan',
     mapsQuery: '009 Pacheco Street, Calvario, Meycauayan, 3020 Bulacan',
+    phone: '09101909050',
     contactNumber: '09101909050',
     contact_number: '09101909050',
     displayPhone: '0910 190 9050',
@@ -154,8 +163,9 @@ const BRANCH_DEFINITIONS = [
     serverTenantId: 'tenant-meycauayan-poblacion',
   },
   {
-    id: '11111111-1111-1111-1111-111111111107',
+    id: 'cefels-caloocan',
     slug: 'cefels-caloocan',
+    legacyUuid: '11111111-1111-1111-1111-111111111107',
     name: 'Victorio ABC — Cefels, Caloocan',
     shortName: 'Cefels, Caloocan',
     socialLabel: 'Cefels, Caloocan',
@@ -164,6 +174,7 @@ const BRANCH_DEFINITIONS = [
     municipality: 'Caloocan, Metro Manila',
     address: 'Flojems Building Second Floor, Cefels, Caloocan, 1427 Metro Manila',
     mapsQuery: 'Flojems Building Second Floor, Cefels, Caloocan, 1427 Metro Manila',
+    phone: '09453311310',
     contactNumber: '09453311310',
     contact_number: '09453311310',
     displayPhone: '0945 331 1310',
@@ -180,19 +191,27 @@ export const OFFICIAL_BRANCHES = BRANCH_DEFINITIONS.map((branch) => ({
   mapsUrl: buildMapsUrl(branch.mapsQuery),
   hours: 'Open Daily • Walk-In & Follow-Up PEP Doses',
   apiBaseUrl: DEFAULT_API_BASE_URL,
+  is_active: true,
   status: 'active',
 }));
 
-export const DEFAULT_BRANCH_SLUG = OFFICIAL_BRANCHES[0].slug;
+export const DEFAULT_BRANCH_SLUG = 'santa-maria';
 export const BRANCH_STORAGE_KEY = 'victorio_abc_active_branch_slug';
 export const BRANCH_MANUAL_OVERRIDE_KEY = 'victorio_abc_manual_branch_selected';
 
-export function getBranchBySlug(slug) {
-  if (!slug) return OFFICIAL_BRANCHES[0];
-  const normalized = String(slug).trim().toLowerCase();
+export function getBranchBySlug(slugOrId) {
+  const fallback =
+    OFFICIAL_BRANCHES.find((b) => b.slug === DEFAULT_BRANCH_SLUG) ||
+    OFFICIAL_BRANCHES[0];
+  if (!slugOrId) return fallback;
+  const normalized = String(slugOrId).trim().toLowerCase();
   return (
-    OFFICIAL_BRANCHES.find((b) => b.slug === normalized || b.id === normalized) ||
-    OFFICIAL_BRANCHES[0]
+    OFFICIAL_BRANCHES.find(
+      (b) =>
+        b.slug === normalized ||
+        b.id === normalized ||
+        b.legacyUuid === normalized
+    ) || fallback
   );
 }
 

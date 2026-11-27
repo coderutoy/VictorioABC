@@ -121,6 +121,9 @@ export function encryptPatientPII(payload = {}) {
   return next;
 }
 
+export const encryptField = encrypt;
+export const decryptField = decrypt;
+
 /**
  * Decrypts sensitive PII fields (`phone`, `address`, `government_id`) on a patient record
  * retrieved from Supabase.
@@ -154,3 +157,6 @@ export function decryptPatientPII(record) {
 
   return next;
 }
+
+export const encryptField = encrypt;
+export const decryptField = decrypt;

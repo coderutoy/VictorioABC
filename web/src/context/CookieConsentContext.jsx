@@ -8,7 +8,6 @@ export const CONSENT_STORAGE_KEY = 'vabc_cookie_consent';
 export const CONSENT_COOKIE_NAME = 'vabc_consent';
 export const CONSENT_VALUES = Object.freeze({
   ACCEPTED: 'accepted',
-  ESSENTIAL_ONLY: 'essential_only',
 });
 
 const SIX_MONTHS_SECONDS = 15552000; // 180 days
@@ -23,7 +22,6 @@ const FORBIDDEN_PII_KEY_REGEX =
 function sanitizeBrowserStorageForHealthcarePrivacy() {
   if (typeof window === 'undefined') return;
   try {
-    // Clean up legacy accessibility toolbar state so font-size is never stuck
     window.localStorage.removeItem('vabc_a11y_prefs');
     if (typeof document !== 'undefined') {
       document.documentElement.style.fontSize = '';
@@ -46,34 +44,30 @@ function sanitizeBrowserStorageForHealthcarePrivacy() {
   }
 }
 
-function buildConsentRecord(status) {
-  const isAccepted = status === CONSENT_VALUES.ACCEPTED;
+function buildAcceptedRecord(timestamp) {
   return {
-    essential: true,
-    analytics: isAccepted,
     consentGiven: true,
-    status: isAccepted ? CONSENT_VALUES.ACCEPTED : CONSENT_VALUES.ESSENTIAL_ONLY,
-    timestamp: new Date().toISOString(),
+    analytics: true,
+    essential: true,
+    status: CONSENT_VALUES.ACCEPTED,
+    timestamp: timestamp || new Date().toISOString(),
   };
 }
 
 function parseStoredConsentRecord(raw) {
   if (!raw) return null;
-  if (raw === CONSENT_VALUES.ACCEPTED || raw === CONSENT_VALUES.ESSENTIAL_ONLY) {
-    return buildConsentRecord(raw);
+  if (raw === CONSENT_VALUES.ACCEPTED) {
+    return buildAcceptedRecord();
   }
   try {
     const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === 'object' && parsed.consentGiven === true) {
-      const isAccepted =
-        parsed.analytics === true || parsed.status === CONSENT_VALUES.ACCEPTED;
-      return {
-        essential: true,
-        analytics: Boolean(isAccepted),
-        consentGiven: true,
-        status: isAccepted ? CONSENT_VALUES.ACCEPTED : CONSENT_VALUES.ESSENTIAL_ONLY,
-        timestamp: parsed.timestamp || new Date().toISOString(),
-      };
+    if (
+      parsed &&
+      typeof parsed === 'object' &&
+      parsed.consentGiven === true &&
+      (parsed.analytics === true || parsed.status === CONSENT_VALUES.ACCEPTED)
+    ) {
+      return buildAcceptedRecord(parsed.timestamp);
     }
   } catch {
     // Ignore malformed JSON
@@ -110,7 +104,6 @@ function readInitialConsentRecord() {
     const stored = window.localStorage.getItem(CONSENT_STORAGE_KEY);
     const parsed = parseStoredConsentRecord(stored);
     if (parsed) {
-      // Ensure localStorage is normalized to structured JSON object format
       window.localStorage.setItem(CONSENT_STORAGE_KEY, JSON.stringify(parsed));
       return parsed;
     }
@@ -122,52 +115,29 @@ function readInitialConsentRecord() {
 
 const CookieConsentContext = createContext(null);
 
-const SESSION_DISMISS_KEY = 'vabc_cookie_notice_dismissed';
-
-function wasNoticeDismissedThisSession() {
-  if (typeof window === 'undefined') return false;
-  try {
-    return window.sessionStorage.getItem(SESSION_DISMISS_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-
 export function CookieConsentProvider({ children }) {
   const [consentRecord, setConsentRecord] = useState(readInitialConsentRecord);
   const [isBannerOpen, setIsBannerOpen] = useState(
-    () => readInitialConsentRecord() === null && !wasNoticeDismissedThisSession()
+    () => readInitialConsentRecord() === null
   );
-  const [openedFromPreferences, setOpenedFromPreferences] = useState(false);
 
   const consent = consentRecord ? consentRecord.status : null;
+  const isAccepted = Boolean(consentRecord?.consentGiven && consentRecord?.analytics);
 
-  // Enforce healthcare storage hygiene and apply conditional script blocking on mount & consent change
   useEffect(() => {
     sanitizeBrowserStorageForHealthcarePrivacy();
 
-    if (consentRecord?.analytics) {
+    if (isAccepted) {
       loadNonEssentialScripts(CONSENT_VALUES.ACCEPTED);
     } else {
       blockOrCleanupNonEssentialScripts();
     }
-  }, [consentRecord]);
+  }, [isAccepted]);
 
-  const saveConsentPreferences = useCallback(({ analytics = false } = {}) => {
-    const nextStatus = analytics
-      ? CONSENT_VALUES.ACCEPTED
-      : CONSENT_VALUES.ESSENTIAL_ONLY;
-    const record = {
-      essential: true,
-      analytics: Boolean(analytics),
-      consentGiven: true,
-      status: nextStatus,
-      timestamp: new Date().toISOString(),
-    };
-
+  const acceptAll = useCallback(() => {
+    const record = buildAcceptedRecord();
     setConsentRecord(record);
     setIsBannerOpen(false);
-    setOpenedFromPreferences(false);
 
     try {
       if (typeof window !== 'undefined') {
@@ -177,76 +147,38 @@ export function CookieConsentProvider({ children }) {
       // Ignore storage write errors
     }
     writeConsentCookie(record);
-
-    if (record.analytics) {
-      loadNonEssentialScripts(CONSENT_VALUES.ACCEPTED);
-    } else {
-      blockOrCleanupNonEssentialScripts();
-    }
-
+    loadNonEssentialScripts(CONSENT_VALUES.ACCEPTED);
     return record;
   }, []);
 
-  const acceptAll = useCallback(() => {
-    return saveConsentPreferences({ analytics: true });
-  }, [saveConsentPreferences]);
-
-  const rejectNonEssential = useCallback(() => {
-    return saveConsentPreferences({ analytics: false });
-  }, [saveConsentPreferences]);
-
   const openCookiePreferences = useCallback(() => {
-    setOpenedFromPreferences(true);
-    setIsBannerOpen(true);
-  }, []);
-
-  /**
-   * "×" dismissal: hides the notice for this browser session only and NEVER treats it as
-   * "Accept All". With no stored decision, every non-essential script stays blocked
-   * (equivalent to Essential Only) until the visitor explicitly opts in via Preferences.
-   */
-  const dismissCookieNotice = useCallback(() => {
-    setIsBannerOpen(false);
-    setOpenedFromPreferences(false);
-    try {
-      if (typeof window !== 'undefined') {
-        window.sessionStorage.setItem(SESSION_DISMISS_KEY, '1');
-      }
-    } catch {
-      // Ignore storage write errors
+    if (!isAccepted) {
+      setIsBannerOpen(true);
     }
-    blockOrCleanupNonEssentialScripts();
-  }, []);
+  }, [isAccepted]);
 
   const closeCookiePreferences = useCallback(() => {
     setIsBannerOpen(false);
-    setOpenedFromPreferences(false);
   }, []);
 
   const value = useMemo(
     () => ({
       consent,
       consentRecord,
-      isBannerOpen,
-      openedFromPreferences,
+      isAccepted,
+      isBannerOpen: !isAccepted && isBannerOpen,
       acceptAll,
-      rejectNonEssential,
-      saveConsentPreferences,
       openCookiePreferences,
       closeCookiePreferences,
-      dismissCookieNotice,
     }),
     [
       consent,
       consentRecord,
+      isAccepted,
       isBannerOpen,
-      openedFromPreferences,
       acceptAll,
-      rejectNonEssential,
-      saveConsentPreferences,
       openCookiePreferences,
       closeCookiePreferences,
-      dismissCookieNotice,
     ]
   );
 

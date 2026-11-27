@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { useAuth, ROLES } from './AuthContext';
+import { useAuth } from './AuthContext';
 import {
   OFFICIAL_BRANCHES,
   DEFAULT_BRANCH_SLUG,
@@ -8,6 +8,7 @@ import {
   BRANCH_MANUAL_OVERRIDE_KEY,
   getBranchBySlug,
   findNearestOfficialBranch,
+  buildMapsUrl,
 } from '../config/branches';
 
 const BranchContext = createContext(null);
@@ -36,9 +37,8 @@ function resolveInitialBranchState() {
 }
 
 export function BranchProvider({ children }) {
-  const { profile, role, isAuthenticated } = useAuth();
+  const { profile, isAuthenticated } = useAuth();
   const [branches, setBranches] = useState(OFFICIAL_BRANCHES);
-  const [selectedBranchId, setSelectedBranchId] = useState('');
   const [initialState] = useState(resolveInitialBranchState);
   const [selectedBranchSlug, setSelectedBranchSlugState] = useState(initialState.slug);
   const [hasManualSelection, setHasManualSelection] = useState(
@@ -47,16 +47,13 @@ export function BranchProvider({ children }) {
   const [loadingBranches, setLoadingBranches] = useState(false);
 
   // Geolocation state
-  const [geolocationStatus, setGeolocationStatus] = useState('idle'); // 'idle' | 'detecting' | 'detected' | 'denied' | 'unavailable'
+  const [geolocationStatus, setGeolocationStatus] = useState('idle');
   const [nearestBranchSlug, setNearestBranchSlug] = useState(null);
   const [distancesBySlug, setDistancesBySlug] = useState({});
-
-  const isGlobalAdmin = role === ROLES.ADMIN;
 
   const persistBranchSlug = useCallback((slug, markManual = false) => {
     const matched = getBranchBySlug(slug);
     setSelectedBranchSlugState(matched.slug);
-    setSelectedBranchId(matched.id);
     if (markManual) {
       setHasManualSelection(true);
     }
@@ -83,7 +80,6 @@ export function BranchProvider({ children }) {
     [persistBranchSlug]
   );
 
-  // Trigger device geolocation and optionally auto-switch to the nearest of the 7 branches
   const detectNearestBranch = useCallback(
     ({ autoSelect = true } = {}) => {
       if (typeof window === 'undefined' || !navigator?.geolocation) {
@@ -120,12 +116,10 @@ export function BranchProvider({ children }) {
     [persistBranchSlug]
   );
 
-  // Automatic Nearest-Branch Detection on initial load when user has not manually selected a branch
   useEffect(() => {
     detectNearestBranch({ autoSelect: !hasManualSelection });
   }, [detectNearestBranch, hasManualSelection]);
 
-  // Sync URL ?branch=<slug> on popstate
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
     const handlePopState = () => {
@@ -140,37 +134,42 @@ export function BranchProvider({ children }) {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
+  // Load branches from public.branches table in Supabase and enrich with official config metadata
   useEffect(() => {
     let active = true;
 
     async function loadBranches() {
-      if (!isAuthenticated || !isSupabaseConfigured) {
+      if (!isSupabaseConfigured) {
         setBranches(OFFICIAL_BRANCHES);
         return;
       }
 
       setLoadingBranches(true);
       try {
-        let query = supabase
+        const { data, error } = await supabase
           .from('branches')
-          .select('id, name, address, barangay, municipality, contact_number, status')
-          .eq('status', 'active')
-          .order('name', { ascending: true });
+          .select('id, name, address, maps_query, phone, lat, lng, is_active')
+          .eq('is_active', true);
 
-        if (!isGlobalAdmin && profile?.branch_id) {
-          query = query.eq('id', profile.branch_id);
-        }
-
-        const { data, error } = await query;
         if (!active) return;
 
         if (!error && Array.isArray(data) && data.length > 0) {
-          setBranches(data);
-          if (!isGlobalAdmin && profile?.branch_id) {
-            setSelectedBranchId(profile.branch_id);
-          } else if (isGlobalAdmin) {
-            setSelectedBranchId((prev) => prev || '');
-          }
+          const merged = OFFICIAL_BRANCHES.map((official) => {
+            const dbRow = data.find((r) => r.id === official.slug);
+            if (!dbRow) return official;
+            return {
+              ...official,
+              name: dbRow.name || official.name,
+              address: dbRow.address || official.address,
+              mapsQuery: dbRow.maps_query || official.mapsQuery,
+              mapsUrl: buildMapsUrl(dbRow.maps_query || official.mapsQuery),
+              phone: dbRow.phone || official.phone,
+              contactNumber: dbRow.phone || official.contactNumber,
+              lat: typeof dbRow.lat === 'number' ? dbRow.lat : official.lat,
+              lng: typeof dbRow.lng === 'number' ? dbRow.lng : official.lng,
+            };
+          });
+          setBranches(merged);
         } else {
           setBranches(OFFICIAL_BRANCHES);
         }
@@ -185,7 +184,7 @@ export function BranchProvider({ children }) {
     return () => {
       active = false;
     };
-  }, [isAuthenticated, isGlobalAdmin, profile?.branch_id]);
+  }, [isAuthenticated]);
 
   const selectedPublicBranch = useMemo(
     () => getBranchBySlug(selectedBranchSlug),
@@ -197,29 +196,22 @@ export function BranchProvider({ children }) {
     return typeof dist === 'number' ? dist : null;
   }, [distancesBySlug, selectedPublicBranch.slug]);
 
+  const assignedBranchSlug = profile?.branch_id
+    ? getBranchBySlug(profile.branch_id).slug
+    : null;
+
   const activeBranchId = isAuthenticated
-    ? isGlobalAdmin
-      ? selectedBranchId || null
-      : profile?.branch_id || selectedPublicBranch?.id || null
-    : selectedPublicBranch?.id || null;
+    ? assignedBranchSlug || selectedPublicBranch.id
+    : selectedPublicBranch.id;
 
   const activeBranch = useMemo(
-    () =>
-      branches.find((b) => b.id === activeBranchId || b.slug === selectedBranchSlug) ||
-      selectedPublicBranch,
-    [branches, activeBranchId, selectedBranchSlug, selectedPublicBranch]
+    () => getBranchBySlug(activeBranchId),
+    [activeBranchId]
   );
 
-  const setActiveBranchId = (branchId) => {
-    if (!branchId) {
-      setSelectedBranchId('');
-      return;
-    }
-    setSelectedBranchId(branchId);
-    const match = OFFICIAL_BRANCHES.find((b) => b.id === branchId || b.slug === branchId);
-    if (match) {
-      setSelectedBranchSlug(match.slug);
-    }
+  const setActiveBranchId = (branchIdOrSlug) => {
+    if (!branchIdOrSlug) return;
+    setSelectedBranchSlug(branchIdOrSlug);
   };
 
   const value = {
@@ -230,7 +222,7 @@ export function BranchProvider({ children }) {
     setSelectedBranchSlug,
     activeBranchId,
     activeBranch,
-    canSwitchBranch: !isAuthenticated || isGlobalAdmin,
+    canSwitchBranch: !isAuthenticated,
     loadingBranches,
     setActiveBranchId,
     geolocationStatus,

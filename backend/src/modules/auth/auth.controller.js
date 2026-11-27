@@ -1,24 +1,35 @@
 import { createClient } from '@supabase/supabase-js';
-import { supabaseAdmin } from '../../config/supabase.js';
+import { supabaseAdmin, supabaseUrl, supabaseAnonKey } from '../../config/supabase.js';
 import { AppError, asyncHandler } from '../../middleware/error.middleware.js';
 
 export const CROSS_BRANCH_DENIED_MESSAGE =
   'Access denied: Your account is assigned to a different branch and cannot sign in from this branch location.';
 
 /**
- * Canonical 7-branch lookup table matching web/src/config/branches.js and supabase/seed.sql.
+ * Canonical 7-branch lookup table matching web/src/config/branches.js and supabase/migrations/20261127_core_clinical_tables.sql.
+ * Maps both branch slugs and legacy UUIDs to canonical branch slug IDs.
  */
-export const OFFICIAL_BRANCH_MAP = Object.freeze({
-  baliwag: '11111111-1111-1111-1111-111111111101',
-  'santa-maria': '11111111-1111-1111-1111-111111111102',
-  pandi: '11111111-1111-1111-1111-111111111103',
-  drt: '11111111-1111-1111-1111-111111111104',
-  'meycauayan-camalig': '11111111-1111-1111-1111-111111111105',
-  'meycauayan-poblacion': '11111111-1111-1111-1111-111111111106',
-  'cefels-caloocan': '11111111-1111-1111-1111-111111111107',
+export const OFFICIAL_BRANCH_SLUGS = Object.freeze([
+  'baliwag',
+  'santa-maria',
+  'pandi',
+  'drt',
+  'meycauayan-camalig',
+  'meycauayan-poblacion',
+  'cefels-caloocan',
+]);
+
+const LEGACY_UUID_TO_SLUG = Object.freeze({
+  '11111111-1111-1111-1111-111111111101': 'baliwag',
+  '11111111-1111-1111-1111-111111111102': 'santa-maria',
+  '11111111-1111-1111-1111-111111111103': 'pandi',
+  '11111111-1111-1111-1111-111111111104': 'drt',
+  '11111111-1111-1111-1111-111111111105': 'meycauayan-camalig',
+  '11111111-1111-1111-1111-111111111106': 'meycauayan-poblacion',
+  '11111111-1111-1111-1111-111111111107': 'cefels-caloocan',
 });
 
-const VALID_BRANCH_IDS = new Set(Object.values(OFFICIAL_BRANCH_MAP));
+const VALID_SLUG_SET = new Set(OFFICIAL_BRANCH_SLUGS);
 
 const ROLE_HOME_PATHS = Object.freeze({
   admin: '/dashboard/admin',
@@ -31,50 +42,40 @@ function roleHomePath(role) {
   return ROLE_HOME_PATHS[String(role || '').toLowerCase()] || '/login';
 }
 
+export function normalizeBranchId(rawVal) {
+  if (!rawVal) return null;
+  const cleaned = String(rawVal).trim().toLowerCase();
+  if (!cleaned) return null;
+  if (VALID_SLUG_SET.has(cleaned)) return cleaned;
+  if (LEGACY_UUID_TO_SLUG[cleaned]) return LEGACY_UUID_TO_SLUG[cleaned];
+  return cleaned;
+}
+
 export function resolveClientBranchId(req) {
-  const rawBranchId =
-    req.body?.branch_id ||
-    req.headers['x-branch-id'] ||
-    req.query?.branch_id ||
-    '';
-  const rawBranchSlug =
-    req.body?.branch_slug ||
-    req.body?.branch_code ||
-    req.headers['x-branch-slug'] ||
-    req.query?.branch_slug ||
-    '';
+  const candidates = [
+    req.body?.branch_id,
+    req.body?.branch_slug,
+    req.body?.branch_code,
+    req.headers['x-branch-id'],
+    req.headers['x-branch-slug'],
+    req.query?.branch_id,
+    req.query?.branch_slug,
+  ];
 
-  const trimmedId = String(rawBranchId).trim().toLowerCase();
-  if (VALID_BRANCH_IDS.has(trimmedId)) {
-    return trimmedId;
+  for (const candidate of candidates) {
+    const normalized = normalizeBranchId(candidate);
+    if (normalized) return normalized;
   }
-  if (OFFICIAL_BRANCH_MAP[trimmedId]) {
-    return OFFICIAL_BRANCH_MAP[trimmedId];
-  }
-
-  const trimmedSlug = String(rawBranchSlug).trim().toLowerCase();
-  if (OFFICIAL_BRANCH_MAP[trimmedSlug]) {
-    return OFFICIAL_BRANCH_MAP[trimmedSlug];
-  }
-  if (VALID_BRANCH_IDS.has(trimmedSlug)) {
-    return trimmedSlug;
-  }
-
-  return trimmedId || null;
+  return null;
 }
 
 export function resolveAssignedBranchId(rawBranchValue) {
-  if (!rawBranchValue) return null;
-  const cleaned = String(rawBranchValue).trim().toLowerCase();
-  if (!cleaned) return null;
-  if (VALID_BRANCH_IDS.has(cleaned)) return cleaned;
-  if (OFFICIAL_BRANCH_MAP[cleaned]) return OFFICIAL_BRANCH_MAP[cleaned];
-  return cleaned;
+  return normalizeBranchId(rawBranchValue);
 }
 
 /**
  * Checks whether a user profile is permitted to sign in from the active client branch.
- * - Branch-bound staff (doctor, nurse, and any admin with an assigned branch_id) MUST match activeBranchId.
+ * - All branch-assigned accounts (admin, doctor, nurse) must match activeBranchId.
  * - Throws HTTP 403 Forbidden if the account belongs to a different branch.
  */
 export function assertBranchLoginAllowed(profile, activeBranchId) {
@@ -83,33 +84,25 @@ export function assertBranchLoginAllowed(profile, activeBranchId) {
   }
 
   const role = String(profile.role || 'patient').toLowerCase();
-  const assignedBranchId = resolveAssignedBranchId(profile.branch_id);
-  const isSuperAdmin =
-    Boolean(profile.super_admin) ||
-    (role === 'admin' && !assignedBranchId);
+  const assignedBranchId = normalizeBranchId(profile.branch_id);
+  const clientBranchId = normalizeBranchId(activeBranchId);
 
-  // Enforce strict branch matching on all branch-bound staff accounts
-  const isBranchBoundStaff =
-    role === 'doctor' ||
-    role === 'nurse' ||
-    (role === 'admin' && !isSuperAdmin);
+  const isSuperAdmin = Boolean(profile.super_admin);
+  const isStaff = role === 'doctor' || role === 'nurse' || (role === 'admin' && !isSuperAdmin);
 
-  if (isBranchBoundStaff) {
-    if (!assignedBranchId || !activeBranchId || assignedBranchId !== activeBranchId) {
+  if (isStaff) {
+    if (assignedBranchId && clientBranchId && assignedBranchId !== clientBranchId) {
       throw new AppError(CROSS_BRANCH_DENIED_MESSAGE, 403);
     }
-  } else if (assignedBranchId && activeBranchId && assignedBranchId !== activeBranchId) {
+    if ((role === 'doctor' || role === 'nurse') && (!assignedBranchId || !clientBranchId)) {
+      throw new AppError(CROSS_BRANCH_DENIED_MESSAGE, 403);
+    }
+  } else if (assignedBranchId && clientBranchId && assignedBranchId !== clientBranchId) {
     throw new AppError(CROSS_BRANCH_DENIED_MESSAGE, 403);
   }
 }
 
 function createEphemeralAuthClient() {
-  const supabaseUrl = process.env.SUPABASE_URL || 'http://localhost:54321';
-  const supabaseAnonKey =
-    process.env.SUPABASE_ANON_KEY ||
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    'placeholder-anon-key';
-
   return createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
       autoRefreshToken: false,
@@ -119,26 +112,29 @@ function createEphemeralAuthClient() {
 }
 
 async function loadUserProfile(authUser) {
-  const { data: profileRow } = await supabaseAdmin
+  const { data: profileRow, error } = await supabaseAdmin
     .from('profiles')
-    .select('id, branch_id, role, full_name, phone, email, license_number, notif_pref, is_active')
+    .select('id, email, full_name, role, branch_id, license_number, is_active, created_at')
     .eq('id', authUser.id)
     .maybeSingle();
 
   const meta = authUser.user_metadata || {};
-  return (
-    profileRow || {
-      id: authUser.id,
-      branch_id: meta.branch_id || null,
-      role: meta.role || 'patient',
-      full_name: meta.full_name || authUser.email || 'Victorio ABC User',
-      phone: meta.phone || null,
-      email: authUser.email || null,
-      license_number: meta.license_number || null,
-      notif_pref: 'all',
-      is_active: true,
-    }
-  );
+  if (!error && profileRow) {
+    return {
+      ...profileRow,
+      branch_id: normalizeBranchId(profileRow.branch_id || meta.branch_id),
+    };
+  }
+
+  return {
+    id: authUser.id,
+    email: authUser.email || null,
+    full_name: meta.full_name || authUser.email || 'Victorio ABC User',
+    role: meta.role || 'patient',
+    branch_id: normalizeBranchId(meta.branch_id) || 'santa-maria',
+    license_number: meta.license_number || null,
+    is_active: meta.is_active !== false,
+  };
 }
 
 /**
@@ -148,14 +144,10 @@ async function loadUserProfile(authUser) {
 export const loginWithBranchLock = asyncHandler(async (req, res) => {
   const email = String(req.body?.email || '').trim();
   const password = String(req.body?.password || '');
-  const activeBranchId = resolveClientBranchId(req);
+  const activeBranchId = resolveClientBranchId(req) || 'santa-maria';
 
   if (!email || !password) {
     throw new AppError('Email and password are required.', 400);
-  }
-
-  if (!activeBranchId) {
-    throw new AppError('Active branch context (branch_id) is required to sign in.', 400);
   }
 
   const authClient = createEphemeralAuthClient();
@@ -185,7 +177,6 @@ export const loginWithBranchLock = asyncHandler(async (req, res) => {
   res.status(200).json({
     success: true,
     data: {
-      // Do not issue a web clinical portal session for patient accounts; redirect them to the mobile app screen
       session: isPatient ? null : authData.session,
       user: isPatient ? null : authData.user,
       profile: resolvedProfile,
@@ -202,10 +193,7 @@ export const loginWithBranchLock = asyncHandler(async (req, res) => {
  * Verifies an existing bearer token against the client's active branch_id.
  */
 export const verifyBranchSession = asyncHandler(async (req, res) => {
-  const activeBranchId = resolveClientBranchId(req);
-  if (!activeBranchId) {
-    throw new AppError('Active branch context (branch_id) is required.', 400);
-  }
+  const activeBranchId = resolveClientBranchId(req) || 'santa-maria';
 
   assertBranchLoginAllowed(req.user, activeBranchId);
 

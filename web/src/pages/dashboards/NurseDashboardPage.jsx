@@ -1,15 +1,19 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { UserPlus, Syringe, Search, CalendarClock, AlertTriangle, ClipboardList, ScanLine } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+import { useMemo, useState } from 'react';
+import {
+  UserPlus,
+  Syringe,
+  Search,
+  CalendarClock,
+  AlertTriangle,
+  ClipboardList,
+  CheckCircle2,
+  ArrowRight,
+  X,
+  RefreshCw,
+} from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useBranch } from '../../context/BranchContext';
-import {
-  useSupabaseQuery,
-  scopeToBranch,
-  todayIso,
-  one,
-} from '../../hooks/useSupabaseQuery';
+import { useClinicalBranchData } from '../../hooks/useClinicalBranchData';
 import {
   DashboardHero,
   KpiCard,
@@ -18,166 +22,252 @@ import {
   Th,
   Td,
   EmptyState,
-  ActionLink,
   StatusPill,
 } from '../../components/dashboard/DashboardWidgets';
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const DOSE_TONE = {
+  completed: 'green',
+  scheduled: 'blue',
+  missed: 'red',
+};
 
-const DOSE_TONE = { completed: 'green', scheduled: 'blue', defaulted: 'red', rescheduled: 'amber' };
+const INITIAL_INTAKE = {
+  full_name: '',
+  phone: '',
+  address: '',
+  age: '',
+  sex: 'male',
+  animal_type: 'dog',
+  wound_site: 'Right hand / forearm',
+  exposure_date: new Date().toISOString().slice(0, 10),
+  notes: '',
+  forward_to_doctor: false,
+};
 
 export function NurseDashboardPage() {
-  const navigate = useNavigate();
   const { profile } = useAuth();
-  const { activeBranchId, activeBranch } = useBranch();
-  const today = todayIso();
+  const { activeBranch } = useBranch();
+  const branchId = activeBranch?.id || profile?.branch_id || 'santa-maria';
+  const today = new Date().toISOString().slice(0, 10);
 
-  const queue = useSupabaseQuery(
-    () =>
-      scopeToBranch(
-        supabase
-          .from('bite_cases')
-          .select('id, created_at, animal_type, bite_site, status, patients(full_name, qr_code_hash)')
-          .eq('status', 'pending_triage')
-          .order('created_at', { ascending: true })
-          .limit(25),
-        activeBranchId
-      ),
-    [activeBranchId]
+  const {
+    cases,
+    doses,
+    loading,
+    refresh,
+    createWalkInIntake,
+    forwardCaseToDoctor,
+    markDoseAdministered,
+  } = useClinicalBranchData(branchId);
+
+  const [intakeOpen, setIntakeOpen] = useState(false);
+  const [intakeForm, setIntakeForm] = useState(INITIAL_INTAKE);
+  const [submittingIntake, setSubmittingIntake] = useState(false);
+  const [administeringId, setAdministeringId] = useState(null);
+  const [lookupQuery, setLookupQuery] = useState('');
+  const [banner, setBanner] = useState('');
+
+  const queuedNurseCases = useMemo(
+    () => cases.filter((c) => c.status === 'queued_nurse'),
+    [cases]
   );
 
-  const dosesToday = useSupabaseQuery(
-    () =>
-      scopeToBranch(
-        supabase
-          .from('pep_schedules')
-          .select('id, case_id, dose_number, scheduled_date, status, bite_cases(patients(full_name))')
-          .eq('scheduled_date', today)
-          .order('dose_number', { ascending: true })
-          .limit(50),
-        activeBranchId
-      ),
-    [activeBranchId, today]
+  const todayDoses = useMemo(
+    () => doses.filter((d) => d.scheduled_date === today),
+    [doses, today]
   );
 
-  const missed = useSupabaseQuery(
+  const missedDoses = useMemo(
     () =>
-      scopeToBranch(
-        supabase
-          .from('pep_schedules')
-          .select('id, case_id, dose_number, scheduled_date, status, bite_cases(patients(full_name))')
-          .lt('scheduled_date', today)
-          .eq('status', 'scheduled')
-          .order('scheduled_date', { ascending: false })
-          .limit(25),
-        activeBranchId
+      doses.filter(
+        (d) =>
+          (d.scheduled_date < today && d.status === 'scheduled') ||
+          d.status === 'missed'
       ),
-    [activeBranchId, today]
+    [doses, today]
   );
 
-  // Administration log lookup (patient QR token or case ID) — results stay in memory only
-  const [lookup, setLookup] = useState('');
-  const [lookupState, setLookupState] = useState({ loading: false, error: '', results: null });
+  const filteredLookupDoses = useMemo(() => {
+    const q = lookupQuery.trim().toLowerCase();
+    if (!q) return doses.slice(0, 12);
+    return doses.filter(
+      (d) =>
+        (d.case_number || '').toLowerCase().includes(q) ||
+        (d.patient?.full_name || '').toLowerCase().includes(q) ||
+        (d.patient?.patient_code || '').toLowerCase().includes(q) ||
+        String(d.dose_day).includes(q)
+    );
+  }, [doses, lookupQuery]);
 
-  const handleLookup = async (e) => {
+  const dueTodayCount = todayDoses.filter((d) => d.status !== 'completed').length;
+  const completedTodayCount = todayDoses.filter((d) => d.status === 'completed').length;
+
+  const handleIntakeSubmit = async (e) => {
     e.preventDefault();
-    const term = lookup.trim().replace(/[%,()]/g, '');
-    if (!term) return;
-    setLookupState({ loading: true, error: '', results: null });
+    if (!intakeForm.full_name.trim()) return;
+    setSubmittingIntake(true);
     try {
-      let query = supabase
-        .from('bite_cases')
-        .select(
-          'id, created_at, animal_type, status, patients!inner(full_name, qr_code_hash), pep_schedules(id, dose_number, scheduled_date, status)'
-        )
-        .limit(10);
-      query = UUID_REGEX.test(term)
-        ? query.eq('id', term)
-        : query.ilike('patients.qr_code_hash', `%${term}%`);
-      query = scopeToBranch(query, activeBranchId);
-      const { data, error } = await query;
-      if (error) throw error;
-      setLookupState({ loading: false, error: '', results: data || [] });
-    } catch (err) {
-      setLookupState({ loading: false, error: err.message || 'Lookup failed', results: null });
+      const created = await createWalkInIntake(intakeForm);
+      setBanner(
+        `Registered walk-in patient "${intakeForm.full_name}" (AES-256-GCM encrypted in patients table • ${created?.case_number}).`
+      );
+      setIntakeForm(INITIAL_INTAKE);
+      setIntakeOpen(false);
+    } finally {
+      setSubmittingIntake(false);
     }
   };
 
-  const queueRows = queue.data || [];
-  const todayRows = dosesToday.data || [];
-  const missedRows = missed.data || [];
-  const completedToday = todayRows.filter((d) => d.status === 'completed').length;
-  const dueToday = todayRows.filter((d) => d.status !== 'completed').length;
+  const handleForwardToDoctor = async (c) => {
+    await forwardCaseToDoctor(c.id);
+    setBanner(
+      `Forwarded ${c.patient?.full_name || c.case_number} to Doctor Consultation Queue (pending_doctor).`
+    );
+  };
 
-  const patientName = (row) => one(one(row.bite_cases)?.patients)?.full_name || 'Unnamed patient';
+  const handleMarkAdministered = async (dose) => {
+    setAdministeringId(dose.id);
+    try {
+      await markDoseAdministered(dose.id, {
+        vaccine_brand: dose.vaccine_brand || 'Speeda PVRV',
+        lot_number: dose.lot_number || 'LOT-2026-A1',
+      });
+      setBanner(
+        `Marked Day ${dose.dose_day} PEP dose as administered for ${dose.patient?.full_name || dose.case_number} (1 vial deducted from branch inventory).`
+      );
+    } finally {
+      setAdministeringId(null);
+    }
+  };
 
   return (
     <div className="space-y-5">
       <DashboardHero
         eyebrow="Intake & Vaccination"
         icon={Syringe}
-        title={`Nurse Workspace — ${profile?.full_name || 'Nurse'}`}
-        subtitle="Patient intake, today's PEP doses, and vaccine administration."
-        branchLabel={activeBranch?.name || 'Assigned Branch'}
+        title={`Nurse Workspace — ${profile?.full_name || 'Nurse Camille Reyes'}`}
+        subtitle="Walk-in patient intake (AES-256-GCM encrypted PII), today's scheduled PEP doses, and dose administration logging."
+        branchLabel={activeBranch?.name || 'Victorio ABC — Santa Maria, Bulacan'}
         branchAddress={activeBranch?.address}
       >
-        <ActionLink to="/patients" variant="secondary">
+        <button
+          type="button"
+          onClick={refresh}
+          className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-white/15 px-4 py-2 text-xs font-extrabold text-white transition hover:bg-white/25"
+        >
+          <RefreshCw className="h-4 w-4" />
+          <span>Refresh Queue</span>
+        </button>
+        <button
+          type="button"
+          data-testid="nurse-open-intake-btn"
+          onClick={() => setIntakeOpen(true)}
+          className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-[#7CD5C7] px-4 py-2 text-xs font-extrabold text-[#464B71] transition hover:bg-[#68c7b8]"
+        >
           <UserPlus className="h-4 w-4" />
-          <span>Walk-In Registration</span>
-        </ActionLink>
-        <ActionLink to="/triage">
-          <ScanLine className="h-4 w-4" />
-          <span>QR Check-In & Triage</span>
-        </ActionLink>
+          <span>+ Walk-In Patient Intake</span>
+        </button>
       </DashboardHero>
 
+      {banner && (
+        <div className="flex items-center justify-between rounded-2xl border border-[#7CD5C7] bg-[#EAFBF8] px-4 py-3 text-xs font-extrabold text-[#464B71]">
+          <span className="inline-flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+            <span>{banner}</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => setBanner('')}
+            aria-label="Dismiss notification"
+            className="rounded-lg p-1 hover:bg-[#7CD5C7]/30"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <KpiCard label="Waiting for Triage" icon={ClipboardList} tone="amber" value={queueRows.length} hint="Cases awaiting vitals & assessment" loading={queue.loading} error={queue.error} />
-        <KpiCard label="Doses Due Today" icon={CalendarClock} tone="blue" value={dueToday} hint="Scheduled, not yet administered" loading={dosesToday.loading} error={dosesToday.error} />
-        <KpiCard label="Completed Today" icon={Syringe} tone="mint" value={completedToday} hint="Doses administered today" loading={dosesToday.loading} error={dosesToday.error} />
-        <KpiCard label="Missed Follow-Ups" icon={AlertTriangle} tone="red" value={missedRows.length} hint="Past-due scheduled doses" loading={missed.loading} error={missed.error} />
+        <KpiCard
+          label="Waiting for Nurse Triage"
+          icon={ClipboardList}
+          tone="amber"
+          value={queuedNurseCases.length}
+          hint="queued_nurse cases awaiting vitals"
+          loading={loading}
+        />
+        <KpiCard
+          label="Doses Due Today"
+          icon={CalendarClock}
+          tone="blue"
+          value={dueTodayCount}
+          hint="Scheduled PEP doses due today"
+          loading={loading}
+        />
+        <KpiCard
+          label="Completed Today"
+          icon={Syringe}
+          tone="mint"
+          value={completedTodayCount}
+          hint="PEP doses administered today"
+          loading={loading}
+        />
+        <KpiCard
+          label="Missed Follow-Ups"
+          icon={AlertTriangle}
+          tone="red"
+          value={missedDoses.length}
+          hint="Past-due scheduled PEP doses"
+          loading={loading}
+        />
       </div>
 
       <div className="grid gap-5 xl:grid-cols-2">
-        {/* Patient Queue & Intake */}
+        {/* 1. Patient Queue & Walk-In Intake */}
         <Panel
-          title="Patient Queue & Intake"
-          subtitle="Waiting for triage / vitals (oldest first)"
+          title="Patient Queue & Intake (queued_nurse)"
+          subtitle="Walk-in patients waiting for nurse vitals before physician WHO Category assessment"
           action={
-            <ActionLink to="/triage" variant="secondary">
-              Open Queue
-            </ActionLink>
+            <button
+              type="button"
+              onClick={() => setIntakeOpen(true)}
+              className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl bg-[#118AB2] px-3 py-1.5 text-xs font-extrabold text-white hover:bg-[#0D6E8E]"
+            >
+              <UserPlus className="h-3.5 w-3.5" />
+              <span>New Walk-In</span>
+            </button>
           }
         >
-          {queue.loading || queue.error || queueRows.length === 0 ? (
-            <EmptyState loading={queue.loading} error={queue.error} message="No patients are waiting for triage right now." />
+          {queuedNurseCases.length === 0 ? (
+            <EmptyState
+              loading={loading}
+              message="No patients waiting in the nurse intake queue. Click '+ Walk-In Patient Intake' to register a new exposure."
+            />
           ) : (
             <TableWrap>
               <thead>
                 <tr>
+                  <Th>Case #</Th>
                   <Th>Patient</Th>
                   <Th>Exposure</Th>
-                  <Th>Arrived</Th>
                   <Th>Action</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#F2F2ED]">
-                {queueRows.map((row) => (
-                  <tr key={row.id}>
-                    <Td className="font-bold">{one(row.patients)?.full_name || 'Unnamed patient'}</Td>
-                    <Td>
-                      {row.animal_type} • {row.bite_site}
-                    </Td>
-                    <Td className="whitespace-nowrap">
-                      {new Date(row.created_at).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' })}
+                {queuedNurseCases.map((c) => (
+                  <tr key={c.id}>
+                    <Td className="font-mono text-xs font-bold">{c.case_number}</Td>
+                    <Td className="font-bold">{c.patient?.full_name || 'Walk-In Patient'}</Td>
+                    <Td className="capitalize">
+                      {c.animal_type} • {c.wound_site}
                     </Td>
                     <Td>
                       <button
                         type="button"
-                        onClick={() => navigate('/triage')}
-                        className="min-h-[40px] rounded-lg bg-[#118AB2] px-3 py-1.5 text-xs font-extrabold text-white hover:bg-[#0D6E8E]"
+                        onClick={() => handleForwardToDoctor(c)}
+                        className="inline-flex min-h-[38px] items-center gap-1 rounded-lg bg-[#118AB2] px-3 py-1.5 text-xs font-extrabold text-white hover:bg-[#0D6E8E]"
                       >
-                        Start Triage
+                        <span>Send to Doctor</span>
+                        <ArrowRight className="h-3.5 w-3.5" />
                       </button>
                     </Td>
                   </tr>
@@ -187,37 +277,58 @@ export function NurseDashboardPage() {
           )}
         </Panel>
 
-        {/* Today's Scheduled Doses */}
-        <Panel title="Today's Scheduled Doses" subtitle="PEP Day 0 / 3 / 7 / 14 / 28 due or completed today">
-          {dosesToday.loading || dosesToday.error || todayRows.length === 0 ? (
-            <EmptyState loading={dosesToday.loading} error={dosesToday.error} message="No PEP doses are scheduled for today." />
+        {/* 2. Today's Scheduled Doses (PEP Day 0 / 3 / 7 / 14 / 28) */}
+        <Panel
+          title="Today's Scheduled Doses (PEP Day 0 / 3 / 7 / 14 / 28)"
+          subtitle={`Scheduled for ${today} at ${activeBranch?.shortName || branchId}`}
+        >
+          {todayDoses.length === 0 ? (
+            <EmptyState
+              loading={loading}
+              message="No PEP doses are scheduled for today yet. When a Doctor assesses a Category II/III case, Day 0–28 doses appear here automatically."
+            />
           ) : (
             <TableWrap>
               <thead>
                 <tr>
-                  <Th>Patient</Th>
-                  <Th>Dose</Th>
+                  <Th>Patient / Case</Th>
+                  <Th>Dose Day</Th>
+                  <Th>Vaccine</Th>
                   <Th>Status</Th>
                   <Th>Action</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#F2F2ED]">
-                {todayRows.map((row) => (
-                  <tr key={row.id}>
-                    <Td className="font-bold">{patientName(row)}</Td>
-                    <Td>{row.dose_number}</Td>
+                {todayDoses.map((d) => (
+                  <tr key={d.id}>
                     <Td>
-                      <StatusPill tone={DOSE_TONE[row.status] || 'navy'}>{row.status}</StatusPill>
+                      <p className="font-bold">{d.patient?.full_name || d.case_number}</p>
+                      <p className="font-mono text-[11px] text-[#464B71]/70">{d.case_number}</p>
+                    </Td>
+                    <Td className="font-extrabold">Day {d.dose_day}</Td>
+                    <Td>{d.vaccine_brand || 'Speeda PVRV'}</Td>
+                    <Td>
+                      <StatusPill tone={DOSE_TONE[d.status] || 'navy'}>{d.status}</StatusPill>
                     </Td>
                     <Td>
-                      {row.status !== 'completed' && (
+                      {d.status !== 'completed' ? (
                         <button
                           type="button"
-                          onClick={() => navigate(`/clinical-orders?case_id=${row.case_id}&tab=vaccinate`)}
-                          className="min-h-[40px] rounded-lg bg-[#7CD5C7] px-3 py-1.5 text-xs font-extrabold text-[#464B71] hover:bg-[#68c7b8]"
+                          disabled={administeringId === d.id}
+                          onClick={() => handleMarkAdministered(d)}
+                          className="inline-flex min-h-[38px] items-center gap-1 rounded-lg bg-[#7CD5C7] px-3 py-1.5 text-xs font-extrabold text-[#464B71] hover:bg-[#68c7b8] disabled:opacity-60"
                         >
-                          Administer
+                          <Syringe className="h-3.5 w-3.5" />
+                          <span>
+                            {administeringId === d.id
+                              ? 'Saving…'
+                              : 'Mark Dose Administered'}
+                          </span>
                         </button>
+                      ) : (
+                        <span className="text-xs font-bold text-emerald-700">
+                          Administered
+                        </span>
                       )}
                     </Td>
                   </tr>
@@ -225,101 +336,280 @@ export function NurseDashboardPage() {
               </tbody>
             </TableWrap>
           )}
-
-          {missedRows.length > 0 && (
-            <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3">
-              <p className="text-xs font-extrabold text-red-800">Missed follow-ups ({missedRows.length})</p>
-              <ul className="mt-1.5 space-y-1 text-xs text-red-900">
-                {missedRows.slice(0, 5).map((row) => (
-                  <li key={row.id}>
-                    {patientName(row)} — {row.dose_number} (was due {row.scheduled_date})
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
         </Panel>
       </div>
 
-      {/* Vaccination & Administration Log lookup */}
+      {/* 3. Vaccination & Administration Log */}
       <Panel
-        title="Vaccination & Administration Log"
-        subtitle="Look up a patient by QR token or a case ID, then record vaccine / ERIG / tetanus doses"
+        title="Vaccination & Administration Log (All Scheduled & Completed PEP Doses)"
+        subtitle="Quick lookup by patient name, patient code, or case number to record administered vaccine doses"
       >
-        <form onSubmit={handleLookup} className="flex flex-col gap-2.5 sm:flex-row">
+        <div className="mb-3 flex flex-col gap-2.5 sm:flex-row">
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-3.5 top-3.5 h-4 w-4 text-[#464B71]/50" />
             <input
               type="text"
-              value={lookup}
-              onChange={(e) => setLookup(e.target.value)}
-              placeholder="Patient QR token (e.g. VABC-…) or case ID"
-              aria-label="Patient QR token or case ID"
-              className="min-h-[44px] w-full rounded-xl border border-[#DDDCD4] bg-[#F2F2ED]/60 py-2 pl-10 pr-3 text-sm font-semibold text-[#464B71] focus:border-[#118AB2] focus:bg-white focus:outline-none focus:ring-4 focus:ring-[#118AB2]/20"
+              value={lookupQuery}
+              onChange={(e) => setLookupQuery(e.target.value)}
+              placeholder="Filter PEP doses by patient name, case number (e.g. CASE-SAN-...), or dose day (0, 3, 7, 14, 28)..."
+              aria-label="Filter PEP doses"
+              className="min-h-[44px] w-full rounded-xl border border-[#DDDCD4] bg-[#F2F2ED]/60 py-2 pl-10 pr-3 text-sm font-semibold text-[#464B71] focus:border-[#118AB2] focus:bg-white focus:outline-none"
             />
           </div>
-          <button
-            type="submit"
-            disabled={lookupState.loading}
-            className="min-h-[44px] rounded-xl bg-[#118AB2] px-5 py-2 text-xs font-extrabold text-white hover:bg-[#0D6E8E] disabled:opacity-60"
-          >
-            {lookupState.loading ? 'Searching…' : 'Look Up'}
-          </button>
-        </form>
+        </div>
 
-        {lookupState.error && (
-          <p role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-800">
-            {lookupState.error}
-          </p>
-        )}
-
-        {lookupState.results && (
-          <div className="mt-3">
-            {lookupState.results.length === 0 ? (
-              <EmptyState message="No matching case found in this branch scope." />
-            ) : (
-              <TableWrap>
-                <thead>
-                  <tr>
-                    <Th>Patient</Th>
-                    <Th>Exposure</Th>
-                    <Th>Doses</Th>
-                    <Th>Action</Th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#F2F2ED]">
-                  {lookupState.results.map((c) => (
-                    <tr key={c.id}>
-                      <Td className="font-bold">{one(c.patients)?.full_name}</Td>
-                      <Td>
-                        {c.animal_type} • <span className="capitalize">{c.status.replace('_', ' ')}</span>
-                      </Td>
-                      <Td>
-                        <div className="flex flex-wrap gap-1">
-                          {(c.pep_schedules || []).map((s) => (
-                            <StatusPill key={s.id} tone={DOSE_TONE[s.status] || 'navy'}>
-                              {s.dose_number}
-                            </StatusPill>
-                          ))}
-                        </div>
-                      </Td>
-                      <Td>
-                        <button
-                          type="button"
-                          onClick={() => navigate(`/clinical-orders?case_id=${c.id}&tab=vaccinate`)}
-                          className="min-h-[40px] rounded-lg bg-[#7CD5C7] px-3 py-1.5 text-xs font-extrabold text-[#464B71] hover:bg-[#68c7b8]"
-                        >
-                          Record Dose
-                        </button>
-                      </Td>
-                    </tr>
-                  ))}
-                </tbody>
-              </TableWrap>
-            )}
-          </div>
+        {filteredLookupDoses.length === 0 ? (
+          <EmptyState
+            loading={loading}
+            message="No PEP doses found matching your filter."
+          />
+        ) : (
+          <TableWrap>
+            <thead>
+              <tr>
+                <Th>Case #</Th>
+                <Th>Patient</Th>
+                <Th>Dose</Th>
+                <Th>Scheduled Date</Th>
+                <Th>Vaccine Brand</Th>
+                <Th>Status</Th>
+                <Th>Action</Th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#F2F2ED]">
+              {filteredLookupDoses.map((d) => (
+                <tr key={d.id}>
+                  <Td className="font-mono text-xs font-bold">{d.case_number}</Td>
+                  <Td className="font-bold">{d.patient?.full_name || 'Patient'}</Td>
+                  <Td className="font-extrabold">Day {d.dose_day}</Td>
+                  <Td className="whitespace-nowrap">{d.scheduled_date}</Td>
+                  <Td>{d.vaccine_brand || 'Speeda PVRV'}</Td>
+                  <Td>
+                    <StatusPill tone={DOSE_TONE[d.status] || 'navy'}>{d.status}</StatusPill>
+                  </Td>
+                  <Td>
+                    {d.status !== 'completed' ? (
+                      <button
+                        type="button"
+                        disabled={administeringId === d.id}
+                        onClick={() => handleMarkAdministered(d)}
+                        className="inline-flex min-h-[38px] items-center gap-1 rounded-lg bg-[#7CD5C7] px-3 py-1.5 text-xs font-extrabold text-[#464B71] hover:bg-[#68c7b8] disabled:opacity-60"
+                      >
+                        <Syringe className="h-3.5 w-3.5" />
+                        <span>
+                          {administeringId === d.id
+                            ? 'Saving…'
+                            : 'Mark Dose Administered'}
+                        </span>
+                      </button>
+                    ) : (
+                      <span className="text-xs font-bold text-emerald-700">
+                        Completed
+                      </span>
+                    )}
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </TableWrap>
         )}
       </Panel>
+
+      {/* Walk-In Patient Intake Modal */}
+      {intakeOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Walk-In Patient Intake Form"
+          className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-[#343857]/70 p-4"
+        >
+          <div className="w-full max-w-lg rounded-3xl border-2 border-[#7CD5C7] bg-white p-6 text-[#464B71] shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-[#F2F2ED] pb-3">
+              <div>
+                <h2 className="text-lg font-extrabold text-[#464B71]">
+                  Walk-In Patient Intake &amp; Triage
+                </h2>
+                <p className="text-xs text-[#464B71]/75">
+                  Patient PII is encrypted with AES-256-GCM before storage in{' '}
+                  <code>patients</code>.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIntakeOpen(false)}
+                className="rounded-xl bg-[#F2F2ED] p-2 text-[#464B71] hover:bg-[#DDDCD4]"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleIntakeSubmit} className="space-y-3 text-xs sm:text-sm">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="block font-extrabold text-[#464B71]">
+                    Patient Full Name *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={intakeForm.full_name}
+                    onChange={(e) =>
+                      setIntakeForm({ ...intakeForm, full_name: e.target.value })
+                    }
+                    placeholder="e.g. Maria Clara Santos"
+                    className="mt-1 min-h-[42px] w-full rounded-xl border border-[#DDDCD4] bg-[#F2F2ED]/60 px-3 py-2 font-semibold text-[#464B71]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-extrabold text-[#464B71]">
+                    Contact Number
+                  </label>
+                  <input
+                    type="text"
+                    value={intakeForm.phone}
+                    onChange={(e) =>
+                      setIntakeForm({ ...intakeForm, phone: e.target.value })
+                    }
+                    placeholder="09XX XXX XXXX"
+                    className="mt-1 min-h-[42px] w-full rounded-xl border border-[#DDDCD4] bg-[#F2F2ED]/60 px-3 py-2 font-semibold text-[#464B71]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-1">
+                  <label className="block font-extrabold text-[#464B71]">Age</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="120"
+                    value={intakeForm.age}
+                    onChange={(e) =>
+                      setIntakeForm({ ...intakeForm, age: e.target.value })
+                    }
+                    placeholder="28"
+                    className="mt-1 min-h-[42px] w-full rounded-xl border border-[#DDDCD4] bg-[#F2F2ED]/60 px-3 py-2 font-semibold text-[#464B71]"
+                  />
+                </div>
+
+                <div className="col-span-1">
+                  <label className="block font-extrabold text-[#464B71]">Sex</label>
+                  <select
+                    value={intakeForm.sex}
+                    onChange={(e) =>
+                      setIntakeForm({ ...intakeForm, sex: e.target.value })
+                    }
+                    className="mt-1 min-h-[42px] w-full rounded-xl border border-[#DDDCD4] bg-[#F2F2ED]/60 px-3 py-2 font-semibold text-[#464B71]"
+                  >
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                  </select>
+                </div>
+
+                <div className="col-span-1">
+                  <label className="block font-extrabold text-[#464B71]">
+                    Biting Animal *
+                  </label>
+                  <select
+                    value={intakeForm.animal_type}
+                    onChange={(e) =>
+                      setIntakeForm({ ...intakeForm, animal_type: e.target.value })
+                    }
+                    className="mt-1 min-h-[42px] w-full rounded-xl border border-[#DDDCD4] bg-[#F2F2ED]/60 px-3 py-2 font-semibold text-[#464B71]"
+                  >
+                    <option value="dog">Dog</option>
+                    <option value="cat">Cat</option>
+                    <option value="other">Other Mammal</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-extrabold text-[#464B71]">
+                  Home Address
+                </label>
+                <input
+                  type="text"
+                  value={intakeForm.address}
+                  onChange={(e) =>
+                    setIntakeForm({ ...intakeForm, address: e.target.value })
+                  }
+                  placeholder="Barangay / Municipality, Bulacan"
+                  className="mt-1 min-h-[42px] w-full rounded-xl border border-[#DDDCD4] bg-[#F2F2ED]/60 px-3 py-2 font-semibold text-[#464B71]"
+                />
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="block font-extrabold text-[#464B71]">
+                    Wound / Bite Site *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={intakeForm.wound_site}
+                    onChange={(e) =>
+                      setIntakeForm({ ...intakeForm, wound_site: e.target.value })
+                    }
+                    className="mt-1 min-h-[42px] w-full rounded-xl border border-[#DDDCD4] bg-[#F2F2ED]/60 px-3 py-2 font-semibold text-[#464B71]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-extrabold text-[#464B71]">
+                    Exposure Date *
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={intakeForm.exposure_date}
+                    onChange={(e) =>
+                      setIntakeForm({ ...intakeForm, exposure_date: e.target.value })
+                    }
+                    className="mt-1 min-h-[42px] w-full rounded-xl border border-[#DDDCD4] bg-[#F2F2ED]/60 px-3 py-2 font-semibold text-[#464B71]"
+                  />
+                </div>
+              </div>
+
+              <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-[#DDDCD4] bg-[#F2F2ED]/50 p-3 text-xs font-bold text-[#464B71]">
+                <input
+                  type="checkbox"
+                  checked={intakeForm.forward_to_doctor}
+                  onChange={(e) =>
+                    setIntakeForm({
+                      ...intakeForm,
+                      forward_to_doctor: e.target.checked,
+                    })
+                  }
+                  className="h-4 w-4 accent-[#118AB2]"
+                />
+                <span>
+                  Vitals complete — send directly to Doctor Assessment Queue (
+                  <code>pending_doctor</code>)
+                </span>
+              </label>
+
+              <div className="flex items-center justify-end gap-2 border-t border-[#F2F2ED] pt-3">
+                <button
+                  type="button"
+                  onClick={() => setIntakeOpen(false)}
+                  className="min-h-[44px] rounded-xl border border-[#DDDCD4] px-4 py-2 text-xs font-extrabold text-[#464B71]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingIntake}
+                  className="min-h-[44px] rounded-xl bg-[#118AB2] px-5 py-2 text-xs font-extrabold text-white shadow-sm hover:bg-[#0D6E8E] disabled:opacity-60"
+                >
+                  {submittingIntake ? 'Encrypting & Saving…' : 'Register Walk-In Patient'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

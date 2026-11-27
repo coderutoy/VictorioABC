@@ -23,7 +23,7 @@ export const ROLE_HOME_PATHS = Object.freeze({
   [ROLES.PATIENT]: '/mobile-app-only',
 });
 
-/** Post-login landing route for each role (patients go to the mobile-app-only screen). */
+/** Post-login landing route for each role (patients go to /mobile-app-only). */
 export function getRoleHome(role) {
   return ROLE_HOME_PATHS[String(role || '').toLowerCase()] || '/login';
 }
@@ -31,28 +31,28 @@ export function getRoleHome(role) {
 export const CROSS_BRANCH_DENIED_MESSAGE =
   'Access denied: Your account is assigned to a different branch and cannot sign in from this branch location.';
 
+function normalizeBranchSlug(val) {
+  if (!val) return null;
+  return getBranchBySlug(val).slug;
+}
+
 function verifyClientSideBranchMatch(profile, activeBranch) {
   if (!profile || !activeBranch) return;
   const role = String(profile.role || 'patient').toLowerCase();
-  const assignedBranchId = profile.branch_id
-    ? String(profile.branch_id).trim().toLowerCase()
-    : null;
-  const activeBranchId = activeBranch.id
-    ? String(activeBranch.id).trim().toLowerCase()
-    : null;
+  const assignedSlug = profile.branch_id ? normalizeBranchSlug(profile.branch_id) : null;
+  const activeSlug = normalizeBranchSlug(activeBranch.slug || activeBranch.id);
 
-  const isSuperAdmin =
-    Boolean(profile.super_admin) || (role === ROLES.ADMIN && !assignedBranchId);
-  const isBranchBoundStaff =
+  const isSuperAdmin = Boolean(profile.super_admin);
+  const isStaff =
     role === ROLES.DOCTOR ||
     role === ROLES.NURSE ||
     (role === ROLES.ADMIN && !isSuperAdmin);
 
-  if (isBranchBoundStaff) {
-    if (!assignedBranchId || !activeBranchId || assignedBranchId !== activeBranchId) {
+  if (isStaff) {
+    if (!assignedSlug || !activeSlug || assignedSlug !== activeSlug) {
       throw new Error(CROSS_BRANCH_DENIED_MESSAGE);
     }
-  } else if (assignedBranchId && activeBranchId && assignedBranchId !== activeBranchId) {
+  } else if (assignedSlug && activeSlug && assignedSlug !== activeSlug) {
     throw new Error(CROSS_BRANCH_DENIED_MESSAGE);
   }
 }
@@ -74,33 +74,35 @@ export function AuthProvider({ children }) {
 
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, branch_id, role, full_name, phone, email, license_number, is_active')
+      .select('id, email, full_name, role, branch_id, license_number, is_active, created_at')
       .eq('id', userId)
       .maybeSingle();
 
-    if (!error && data) {
-      setAuthError(null);
-      setProfile(data);
-      return data;
-    }
-
-    // Fallback to signed Supabase Auth user_metadata if public.profiles table/row is not yet migrated
     const resolvedUser =
       typeof authUser === 'object' && authUser
         ? authUser
         : (await supabase.auth.getUser()).data?.user;
+    const meta = resolvedUser?.user_metadata || {};
+
+    if (!error && data) {
+      const normalizedProfile = {
+        ...data,
+        branch_id: normalizeBranchSlug(data.branch_id || meta.branch_id) || DEFAULT_BRANCH_SLUG,
+      };
+      setAuthError(null);
+      setProfile(normalizedProfile);
+      return normalizedProfile;
+    }
 
     if (resolvedUser) {
-      const meta = resolvedUser.user_metadata || {};
       const fallbackProfile = {
         id: resolvedUser.id,
-        branch_id: meta.branch_id || null,
-        role: meta.role || 'patient',
-        full_name: meta.full_name || resolvedUser.email || 'Victorio ABC User',
-        phone: meta.phone || null,
         email: resolvedUser.email || null,
+        full_name: meta.full_name || resolvedUser.email || 'Victorio ABC User',
+        role: meta.role || 'patient',
+        branch_id: normalizeBranchSlug(meta.branch_id) || DEFAULT_BRANCH_SLUG,
         license_number: meta.license_number || null,
-        is_active: true,
+        is_active: meta.is_active !== false,
       };
       setAuthError(null);
       setProfile(fallbackProfile);
@@ -130,7 +132,6 @@ export function AuthProvider({ children }) {
 
         if (initialSession?.user?.id) {
           const loadedProfile = await fetchProfile(initialSession.user);
-          // Block patient role from holding an active web clinical dashboard session
           if (loadedProfile?.role === ROLES.PATIENT) {
             await supabase.auth.signOut();
             if (isMounted) {
@@ -184,88 +185,22 @@ export function AuthProvider({ children }) {
           : DEFAULT_BRANCH_SLUG
       );
 
-    // 1. Primary path: authenticate via backend /api/v1/auth/login which enforces HTTP 403 branch lock
-    try {
-      const res = await api.post('/auth/login', {
-        email,
-        password,
-        branch_id: activeBranch?.id,
-        branch_slug: activeBranch?.slug,
-      });
+    // 1. Authenticate directly against Supabase Auth with VITE_SUPABASE_ANON_KEY
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: String(email || '').trim(),
+      password,
+    });
 
-      const payload = res.data?.data || {};
-      const resolvedProfile = payload.profile;
-      const resolvedRole = String(
-        payload.role || resolvedProfile?.role || 'patient'
-      ).toLowerCase();
-
-      // Double-check branch match on the client as well
-      verifyClientSideBranchMatch(resolvedProfile, activeBranch);
-
-      // Patient role: do NOT establish a web clinical session; redirect to Mobile App Download screen
-      if (resolvedRole === ROLES.PATIENT || payload.require_mobile_app) {
-        await supabase.auth.signOut();
-        setSession(null);
-        setProfile(null);
-        return {
-          role: ROLES.PATIENT,
-          profile: resolvedProfile,
-          requireMobileApp: true,
-        };
-      }
-
-      if (payload.session?.access_token && payload.session?.refresh_token) {
-        await supabase.auth.setSession({
-          access_token: payload.session.access_token,
-          refresh_token: payload.session.refresh_token,
-        });
-      }
-
-      setSession(payload.session);
-      setProfile(resolvedProfile);
-      return {
-        session: payload.session,
-        user: payload.user,
-        profile: resolvedProfile,
-        role: resolvedRole,
-        requireMobileApp: false,
-      };
-    } catch (err) {
-      // If backend responded with an explicit HTTP status (e.g., 401 or 403 Forbidden), enforce it immediately
-      if (err?.response) {
-        await supabase.auth.signOut();
-        setSession(null);
-        setProfile(null);
-        const msg =
-          err.response.data?.message ||
-          (err.response.status === 403
-            ? CROSS_BRANCH_DENIED_MESSAGE
-            : 'Invalid email or password.');
-        setAuthError(msg);
-        const wrapped = new Error(msg);
-        wrapped.status = err.response.status;
-        throw wrapped;
-      }
-
-      // If it was already our client-side branch mismatch error, rethrow
-      if (err?.message === CROSS_BRANCH_DENIED_MESSAGE) {
-        await supabase.auth.signOut();
-        setSession(null);
-        setProfile(null);
-        setAuthError(err.message);
-        throw err;
-      }
+    if (error || !data?.user) {
+      const msg = error?.message || 'Invalid email or password. Please check your credentials.';
+      setAuthError(msg);
+      throw new Error(msg);
     }
 
-    // 2. Fallback path if backend server is offline: authenticate with Supabase & enforce branch check
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      setAuthError(error.message);
-      throw error;
-    }
-
+    // 2. Load user profile from public.profiles (with signed user_metadata fallback)
     const loadedProfile = await fetchProfile(data.user);
 
+    // 3. Enforce strict branch lock on the client AND verify with backend /api/v1/auth/verify-branch if reachable
     try {
       verifyClientSideBranchMatch(loadedProfile, activeBranch);
     } catch (branchErr) {
@@ -273,10 +208,33 @@ export function AuthProvider({ children }) {
       setSession(null);
       setProfile(null);
       setAuthError(branchErr.message);
-      throw branchErr;
+      const errObj = new Error(branchErr.message);
+      errObj.status = 403;
+      throw errObj;
+    }
+
+    try {
+      await api.post('/auth/verify-branch', {
+        branch_id: activeBranch.id,
+        branch_slug: activeBranch.slug,
+      });
+    } catch (apiErr) {
+      if (apiErr?.response?.status === 403) {
+        await supabase.auth.signOut();
+        setSession(null);
+        setProfile(null);
+        const msg = apiErr.response.data?.message || CROSS_BRANCH_DENIED_MESSAGE;
+        setAuthError(msg);
+        const errObj = new Error(msg);
+        errObj.status = 403;
+        throw errObj;
+      }
+      // Ignore network/offline errors on verify-branch since client-side check already verified
     }
 
     const resolvedRole = String(loadedProfile?.role || 'patient').toLowerCase();
+
+    // 4. Patient role: do NOT establish a web clinical session; route strictly to /mobile-app-only
     if (resolvedRole === ROLES.PATIENT) {
       await supabase.auth.signOut();
       setSession(null);
@@ -288,8 +246,11 @@ export function AuthProvider({ children }) {
       };
     }
 
+    setSession(data.session);
+    setProfile(loadedProfile);
     return {
-      ...data,
+      session: data.session,
+      user: data.user,
       profile: loadedProfile,
       role: resolvedRole,
       requireMobileApp: false,
@@ -312,13 +273,13 @@ export function AuthProvider({ children }) {
     isAuthenticated: Boolean(
       session &&
         profile &&
-        profile.is_active &&
+        profile.is_active !== false &&
         STAFF_ROLES.includes(profile.role)
     ),
     isSupabaseConfigured,
     signIn,
     signOut,
-    refreshProfile: () => fetchProfile(session?.user?.id),
+    refreshProfile: () => fetchProfile(session?.user),
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
