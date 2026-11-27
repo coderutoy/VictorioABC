@@ -1,11 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import {
-  Building2,
-  TrendingUp,
-  FlaskConical,
   ShieldCheck,
-  FileCheck2,
   AlertTriangle,
   RefreshCw,
   ArrowRightLeft,
@@ -22,6 +18,7 @@ import {
   BellRing,
   Eye,
   Lock,
+  Power,
 } from 'lucide-react';
 import api from '../../lib/api';
 import { OFFICIAL_BRANCHES } from '../../config/branches';
@@ -48,19 +45,12 @@ function formatDateTime(iso) {
   }
 }
 
-const ADMIN_TABS = [
-  { id: 'matrix', label: '7-Branch Matrix & KPIs', icon: Building2 },
-  { id: 'predictive', label: '14-Day Stockout & Rebalance', icon: TrendingUp },
-  { id: 'yield', label: 'Multi-Dose Vial Yield', icon: FlaskConical },
-  { id: 'staff', label: 'Staff & PRC Governance', icon: ShieldCheck },
-  { id: 'audit', label: 'Immutable Audit Log', icon: FileCheck2 },
-];
-
 export function AdminDashboardPage() {
   const outletCtx = useOutletContext() || {};
   const isDark = Boolean(outletCtx.isDark);
-  const activeTab = outletCtx.activeTab || 'matrix';
-  const setSearchParams = outletCtx.setSearchParams;
+  const rawTab = outletCtx.activeTab || 'matrix';
+  const activeTab =
+    rawTab === 'predictive' || rawTab === 'yield' ? 'inventory' : rawTab;
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -71,14 +61,22 @@ export function AdminDashboardPage() {
   const [selectedBranchRow, setSelectedBranchRow] = useState(null);
   const [missedDrawerOpen, setMissedDrawerOpen] = useState(false);
 
-  // Rebalance execution state
+  // Rebalance execution & manual transfer modal state
   const [transferringId, setTransferringId] = useState(null);
+  const [manualTransferOpen, setManualTransferOpen] = useState(false);
+  const [manualTransferForm, setManualTransferForm] = useState({
+    from_branch_id: 'pandi',
+    to_branch_id: 'santa-maria',
+    vials_count: 10,
+    reason: 'Proactive FEFO inter-branch stock balancing ordered by Super Admin.',
+  });
 
   // Staff Governance modals
   const [staffBranchFilter, setStaffBranchFilter] = useState('all');
   const [staffModalOpen, setStaffModalOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState(null);
   const [staffSubmitting, setStaffSubmitting] = useState(false);
+  const [togglingStaffId, setTogglingStaffId] = useState(null);
   const [staffForm, setStaffForm] = useState({
     email: '',
     password: 'VictorioABC@2026',
@@ -114,12 +112,6 @@ export function AdminDashboardPage() {
     fetchCommandCenter();
   }, [fetchCommandCenter]);
 
-  const switchTab = (tabId) => {
-    if (setSearchParams) {
-      setSearchParams({ tab: tabId });
-    }
-  };
-
   const handleExecuteRebalance = async (rec) => {
     setTransferringId(rec.id);
     setNotice(null);
@@ -132,11 +124,38 @@ export function AdminDashboardPage() {
         reason: rec.rationale,
       });
       setNotice(
-        `Executed transfer: ${rec.recommended_vials} FEFO vials (${rec.batch_number}) moved from ${rec.from_branch_name} to ${rec.to_branch_name}.`
+        `Transfer executed in Supabase: ${rec.recommended_vials} FEFO vials (${rec.batch_number}) moved from ${rec.from_branch_name} to ${rec.to_branch_name}.`
       );
       await fetchCommandCenter();
     } catch (err) {
       setError(err?.userMessage || err?.message || 'Failed to execute rebalance transfer.');
+    } finally {
+      setTransferringId(null);
+    }
+  };
+
+  const handleManualTransferSubmit = async (e) => {
+    e.preventDefault();
+    if (manualTransferForm.from_branch_id === manualTransferForm.to_branch_id) {
+      setError('Source and destination branches must be different.');
+      return;
+    }
+    setTransferringId('manual');
+    setNotice(null);
+    try {
+      await api.post('/admin/rebalance-transfer', {
+        from_branch_id: manualTransferForm.from_branch_id,
+        to_branch_id: manualTransferForm.to_branch_id,
+        vials_count: Number(manualTransferForm.vials_count) || 10,
+        reason: manualTransferForm.reason,
+      });
+      setNotice(
+        `Transferred ${manualTransferForm.vials_count} PVRV vials from ${manualTransferForm.from_branch_id} to ${manualTransferForm.to_branch_id}.`
+      );
+      setManualTransferOpen(false);
+      await fetchCommandCenter();
+    } catch (err) {
+      setError(err?.userMessage || err?.message || 'Failed to execute inter-branch transfer.');
     } finally {
       setTransferringId(null);
     }
@@ -172,6 +191,25 @@ export function AdminDashboardPage() {
     setStaffModalOpen(true);
   };
 
+  const handleToggleStaffActive = async (member) => {
+    setTogglingStaffId(member.id);
+    setNotice(null);
+    try {
+      const nextActive = member.is_active === false;
+      await api.patch(`/admin/staff/${member.id}`, {
+        is_active: nextActive,
+      });
+      setNotice(
+        `${member.full_name} account ${nextActive ? 'activated' : 'deactivated'} in Supabase.`
+      );
+      await fetchCommandCenter();
+    } catch (err) {
+      setError(err?.userMessage || err?.message || 'Failed to toggle staff active status.');
+    } finally {
+      setTogglingStaffId(null);
+    }
+  };
+
   const handleStaffSubmit = async (e) => {
     e.preventDefault();
     setStaffSubmitting(true);
@@ -186,7 +224,7 @@ export function AdminDashboardPage() {
           prc_expiry_date: staffForm.prc_expiry_date,
           is_active: staffForm.is_active,
         });
-        setNotice(`Updated staff governance for ${staffForm.full_name}.`);
+        setNotice(`Saved branch & PRC governance for ${staffForm.full_name}.`);
       } else {
         await api.post('/admin/staff', {
           email: staffForm.email,
@@ -197,7 +235,9 @@ export function AdminDashboardPage() {
           prc_license_number: staffForm.prc_license_number,
           prc_expiry_date: staffForm.prc_expiry_date,
         });
-        setNotice(`Provisioned new ${staffForm.role.toUpperCase()} account for ${staffForm.full_name}.`);
+        setNotice(
+          `Provisioned new ${staffForm.role.toUpperCase()} account for ${staffForm.full_name}.`
+        );
       }
       setStaffModalOpen(false);
       await fetchCommandCenter();
@@ -283,36 +323,11 @@ export function AdminDashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* Top Executive Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-[#DDDCD4] bg-white p-5 shadow-xs">
-        <div>
-          <div className="inline-flex items-center gap-2 rounded-full bg-[#118AB2]/10 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-[#118AB2]">
-            <ShieldCheck className="h-3.5 w-3.5" />
-            <span>Super Admin / Owner Command Center • All 7 Official Branches</span>
-          </div>
-          <h1 className="mt-1.5 text-xl font-extrabold sm:text-2xl">
-            Network Intelligence, FEFO Stockout Engine &amp; Clinical Governance
-          </h1>
-          <p className="text-xs opacity-75">
-            100% live Supabase PostgreSQL telemetry across Baliwag, Santa Maria, Pandi, DRT, Meycauayan (Camalig &amp; Poblacion), and Cefels Caloocan.
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={fetchCommandCenter}
-          disabled={loading}
-          className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-[#118AB2] px-4 py-2.5 text-xs font-extrabold text-white shadow-xs transition hover:bg-[#0D6E8E] disabled:opacity-60"
-        >
-          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          <span>Sync Live Network DB</span>
-        </button>
-      </div>
-
+      {/* Status Toast Notifications */}
       {notice && (
         <div
           role="status"
-          className="flex items-center justify-between gap-3 rounded-2xl border border-emerald-400 bg-emerald-50 px-4 py-3 text-xs font-extrabold text-emerald-950"
+          className="flex items-center justify-between gap-3 rounded-2xl border border-emerald-400 bg-emerald-50 px-4 py-3 text-xs font-extrabold text-emerald-950 shadow-xs"
         >
           <span className="flex items-center gap-2">
             <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
@@ -322,6 +337,7 @@ export function AdminDashboardPage() {
             type="button"
             onClick={() => setNotice(null)}
             className="rounded-lg p-1 hover:bg-emerald-200/60"
+            aria-label="Dismiss notice"
           >
             <X className="h-4 w-4" />
           </button>
@@ -344,293 +360,308 @@ export function AdminDashboardPage() {
         </div>
       )}
 
-      {/* 1. NETWORK-WIDE LIVE KPI STRIP (5 Executive Cards) */}
-      <section aria-label="Network-Wide KPI Strip" className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-5">
-        {/* Card 1: Total Daily Revenue */}
-        <div className="rounded-2xl border border-[#DDDCD4] bg-white p-4 shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-extrabold uppercase tracking-wider opacity-75">
-              Total Daily Revenue
-            </span>
-            <Banknote className="h-4 w-4 text-emerald-600" />
-          </div>
-          <p className="mt-2 text-2xl font-extrabold text-emerald-600">
-            {formatPhp(kpi.totalDailyRevenuePhp)}
-          </p>
-          <div className="mt-2.5 grid grid-cols-2 gap-1 border-t border-[#DDDCD4]/60 pt-2 text-[10px] font-bold opacity-85">
-            <span>Cash: {formatPhp(kpi.revenueByMethod?.cash)}</span>
-            <span>GCash/Maya: {formatPhp(kpi.revenueByMethod?.gcash_maya)}</span>
-            <span>Card: {formatPhp(kpi.revenueByMethod?.card)}</span>
-            <span>HMO: {formatPhp(kpi.revenueByMethod?.hmo)}</span>
-          </div>
-        </div>
-
-        {/* Card 2: Total Patients Treated */}
-        <div className="rounded-2xl border border-[#DDDCD4] bg-white p-4 shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-extrabold uppercase tracking-wider opacity-75">
-              Total Patients Treated
-            </span>
-            <Users className="h-4 w-4 text-[#118AB2]" />
-          </div>
-          <p className="mt-2 text-2xl font-extrabold">
-            {kpi.totalPatientsTreated?.total ?? 0}
-          </p>
-          <div className="mt-2.5 flex items-center justify-between border-t border-[#DDDCD4]/60 pt-2 text-[11px] font-bold">
-            <span className="text-[#118AB2]">
-              New Walk-Ins: {kpi.totalPatientsTreated?.newCases ?? 0}
-            </span>
-            <span className="text-emerald-600">
-              Boosters: {kpi.totalPatientsTreated?.scheduledBoosters ?? 0}
-            </span>
-          </div>
-        </div>
-
-        {/* Card 3: Network Missed Follow-Ups (Red Alert Badge + Drill-Down) */}
-        <div className="rounded-2xl border-2 border-red-400/70 bg-white p-4 shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-extrabold uppercase tracking-wider text-red-600">
-              Network Missed Follow-Ups
-            </span>
-            <PhoneMissed className="h-4 w-4 text-red-600" />
-          </div>
-          <div className="mt-2 flex items-baseline justify-between">
-            <p className="text-2xl font-extrabold text-red-600">
-              {kpi.missedFollowUps?.count ?? 0}
-            </p>
-            <span className="rounded-full bg-red-600 px-2.5 py-0.5 text-[10px] font-extrabold text-white">
-              {kpi.missedFollowUps?.cat3Count ?? 0} Cat III Critical
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setMissedDrawerOpen(true)}
-            className="mt-2.5 inline-flex w-full items-center justify-between border-t border-[#DDDCD4]/60 pt-2 text-[11px] font-extrabold text-red-600 hover:underline"
-          >
-            <span>Inspect Defaulter Roster &rarr;</span>
-          </button>
-        </div>
-
-        {/* Card 4: Pending PhilHealth ABTP Receivables */}
-        <div className="rounded-2xl border border-[#DDDCD4] bg-white p-4 shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-extrabold uppercase tracking-wider opacity-75">
-              Pending PhilHealth ABTP
-            </span>
-            <FileSpreadsheet className="h-4 w-4 text-[#118AB2]" />
-          </div>
-          <p className="mt-2 text-2xl font-extrabold text-[#118AB2]">
-            {formatPhp(kpi.pendingPhilhealthAbtp?.amountPhp)}
-          </p>
-          <p className="mt-2.5 border-t border-[#DDDCD4]/60 pt-2 text-[11px] font-bold opacity-80">
-            {kpi.pendingPhilhealthAbtp?.claimsCount ?? 0} PRC-Validated ABTP Claims
-          </p>
-        </div>
-
-        {/* Card 5: Active System Alerts */}
-        <div className="rounded-2xl border border-[#DDDCD4] bg-white p-4 shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-extrabold uppercase tracking-wider opacity-75">
-              Active System Alerts
-            </span>
-            <BellRing className="h-4 w-4 text-amber-500" />
-          </div>
-          <p className="mt-2 text-2xl font-extrabold text-amber-600">
-            {kpi.activeSystemAlerts?.total ?? 0}
-          </p>
-          <div className="mt-2.5 flex flex-wrap gap-1.5 border-t border-[#DDDCD4]/60 pt-2 text-[10px] font-extrabold">
-            <span className="rounded bg-red-100 px-1.5 py-0.5 text-red-800">
-              {kpi.activeSystemAlerts?.coldChainBreaches ?? 0} Cold-Chain
-            </span>
-            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-900">
-              {kpi.activeSystemAlerts?.lowStockBranches ?? 0} Stockout Risk
-            </span>
-            <span className="rounded bg-sky-100 px-1.5 py-0.5 text-sky-900">
-              {kpi.activeSystemAlerts?.pendingHighRiskAi ?? 0} AI Cat III
-            </span>
-          </div>
-        </div>
-      </section>
-
-      {/* Module Navigation Pills */}
-      <div className="flex flex-wrap items-center gap-2">
-        {ADMIN_TABS.map(({ id, label, icon: Icon }) => {
-          const isCurrent = activeTab === id;
-          return (
-            <button
-              key={id}
-              type="button"
-              onClick={() => switchTab(id)}
-              className={`inline-flex min-h-[44px] items-center gap-2 rounded-xl px-4 py-2 text-xs font-extrabold transition ${
-                isCurrent
-                  ? 'bg-[#118AB2] text-white shadow-sm'
-                  : 'border border-[#DDDCD4] bg-white hover:border-[#118AB2]'
-              }`}
-            >
-              <Icon className="h-4 w-4" />
-              <span>{label}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* TAB 1: 7-BRANCH COMPARISON MATRIX */}
+      {/* =====================================================================
+          VIEW 1: OVERVIEW & 7-BRANCH MATRIX (`activeTab === 'matrix'`)
+         ===================================================================== */}
       {activeTab === 'matrix' && (
-        <section className="rounded-3xl border border-[#DDDCD4] bg-white p-5 shadow-xs">
-          <div className="flex flex-wrap items-center justify-between gap-2 pb-4">
+        <div className="space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-[#DDDCD4] bg-white p-6 shadow-xs">
             <div>
-              <h2 className="text-lg font-extrabold">
-                7-Branch Operational Comparison Matrix
-              </h2>
+              <div className="inline-flex items-center gap-2 rounded-full bg-[#118AB2]/10 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-[#118AB2]">
+                <ShieldCheck className="h-3.5 w-3.5" />
+                <span>Owner Overview • All 7 Official Branches</span>
+              </div>
+              <h1 className="mt-1.5 text-xl font-extrabold sm:text-2xl">
+                Network KPIs &amp; 7-Branch Operational Matrix
+              </h1>
               <p className="text-xs opacity-75">
-                Click any branch row to open its read-only operational drill-down drawer (cases, FEFO stock, active vials, cold-chain &amp; audits).
+                Click any branch row to inspect its live cases, FEFO vaccine stock, cold-chain history, and assigned staff.
               </p>
             </div>
-            <span className="rounded-full bg-[#7CD5C7]/30 px-3 py-1 text-xs font-extrabold">
-              {branchMatrix.length} Official Branches Active
-            </span>
+
+            <button
+              type="button"
+              onClick={fetchCommandCenter}
+              disabled={loading}
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-[#118AB2] px-4 py-2.5 text-xs font-extrabold text-white shadow-xs transition hover:bg-[#0D6E8E] disabled:opacity-60"
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              <span>Refresh Live Data</span>
+            </button>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[960px] border-collapse text-left text-xs">
-              <thead>
-                <tr className="border-b border-[#DDDCD4] bg-[#F2F2ED] text-[11px] font-extrabold uppercase tracking-wider">
-                  <th className="rounded-tl-xl px-3.5 py-3">Official Branch</th>
-                  <th className="px-3.5 py-3">Daily Sales</th>
-                  <th className="px-3.5 py-3">Patients (New / Booster)</th>
-                  <th className="px-3.5 py-3">PVRV Vials Left</th>
-                  <th className="px-3.5 py-3">ERIG / HRIG Left</th>
-                  <th className="px-3.5 py-3">Latest Cold-Chain (°C)</th>
-                  <th className="px-3.5 py-3">Open-Vial Wastage (%)</th>
-                  <th className="px-3.5 py-3">Audit Status</th>
-                  <th className="rounded-tr-xl px-3.5 py-3 text-right">Drill-Down</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#DDDCD4]/70">
-                {branchMatrix.map((row) => (
-                  <tr
-                    key={row.branch_id}
-                    onClick={() => setSelectedBranchRow(row)}
-                    className="cursor-pointer transition hover:bg-[#118AB2]/5"
-                  >
-                    <td className="px-3.5 py-3.5">
-                      <p className="font-extrabold">{row.short_name}</p>
-                      <p className="text-[11px] opacity-70">{row.phone}</p>
-                    </td>
-                    <td className="px-3.5 py-3.5 font-extrabold text-emerald-600">
-                      {formatPhp(row.dailySalesPhp)}
-                      {row.pendingPhilhealthPhp > 0 && (
-                        <span className="block text-[10px] font-semibold text-[#118AB2]">
-                          +{formatPhp(row.pendingPhilhealthPhp)} ABTP
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-3.5 py-3.5 font-bold">
-                      <span className="text-[#118AB2]">{row.newCasesCount} New</span>
-                      <span className="mx-1.5 opacity-40">/</span>
-                      <span className="text-emerald-600">{row.boosterCount} Boosters</span>
-                    </td>
-                    <td className="px-3.5 py-3.5">
-                      <span
-                        className={`inline-flex rounded-full px-2.5 py-0.5 font-extrabold ${
-                          row.pvrvVialsLeft <= 25
-                            ? 'bg-red-100 text-red-800'
-                            : 'bg-emerald-100 text-emerald-800'
-                        }`}
-                      >
-                        {row.pvrvVialsLeft} vials
-                      </span>
-                    </td>
-                    <td className="px-3.5 py-3.5 font-extrabold">
-                      {row.erigHrigLeft} vials
-                    </td>
-                    <td className="px-3.5 py-3.5">
-                      {row.latestTempC !== null ? (
-                        <span
-                          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 font-extrabold ${
-                            row.isColdChainBreach
-                              ? 'bg-red-600 text-white'
-                              : 'bg-emerald-100 text-emerald-900'
-                          }`}
-                        >
-                          <ThermometerSnowflake className="h-3.5 w-3.5" />
-                          <span>{row.latestTempC}°C</span>
-                        </span>
-                      ) : (
-                        <span className="opacity-60">No reading</span>
-                      )}
-                    </td>
-                    <td className="px-3.5 py-3.5">
-                      <span
-                        className={`font-extrabold ${
-                          row.openVialWastageRatePct >= 20
-                            ? 'text-red-600'
-                            : 'text-emerald-600'
-                        }`}
-                      >
-                        {row.openVialWastageRatePct}%
-                      </span>
-                      <span className="block text-[10px] opacity-70">
-                        {row.wastedVialDoses} wasted / {row.totalReconstitutedDoses} cap
-                      </span>
-                    </td>
-                    <td className="px-3.5 py-3.5">
-                      <span
-                        className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-extrabold ${
-                          row.auditStatus === 'Compliant'
-                            ? 'bg-emerald-100 text-emerald-900'
-                            : 'bg-red-100 text-red-900'
-                        }`}
-                      >
-                        {row.auditStatus}
-                      </span>
-                    </td>
-                    <td className="px-3.5 py-3.5 text-right">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedBranchRow(row);
-                        }}
-                        className="inline-flex items-center gap-1 rounded-xl bg-[#118AB2]/10 px-3 py-1.5 text-[11px] font-extrabold text-[#118AB2] hover:bg-[#118AB2] hover:text-white"
-                      >
-                        <Eye className="h-3.5 w-3.5" />
-                        <span>Inspect</span>
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
+          {/* 5-Card Network KPI Strip */}
+          <section
+            aria-label="Network-Wide KPI Strip"
+            className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5"
+          >
+            <div className="rounded-2xl border border-[#DDDCD4] bg-white p-4 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-extrabold uppercase tracking-wider opacity-75">
+                  Total Daily Revenue
+                </span>
+                <Banknote className="h-4 w-4 text-emerald-600" />
+              </div>
+              <p className="mt-2 text-2xl font-extrabold text-emerald-600">
+                {formatPhp(kpi.totalDailyRevenuePhp)}
+              </p>
+              <div className="mt-2.5 grid grid-cols-2 gap-1 border-t border-[#DDDCD4]/60 pt-2 text-[10px] font-bold opacity-85">
+                <span>Cash: {formatPhp(kpi.revenueByMethod?.cash)}</span>
+                <span>GCash: {formatPhp(kpi.revenueByMethod?.gcash_maya)}</span>
+                <span>Card: {formatPhp(kpi.revenueByMethod?.card)}</span>
+                <span>HMO: {formatPhp(kpi.revenueByMethod?.hmo)}</span>
+              </div>
+            </div>
 
-      {/* TAB 2: 14-DAY PREDICTIVE STOCKOUT & AUTO-REBALANCING ENGINE */}
-      {activeTab === 'predictive' && (
-        <div className="space-y-6">
-          {/* Actionable Auto-Rebalancing Recommendations */}
-          <section className="rounded-3xl border-2 border-[#118AB2] bg-white p-5 shadow-xs">
+            <div className="rounded-2xl border border-[#DDDCD4] bg-white p-4 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-extrabold uppercase tracking-wider opacity-75">
+                  Patients Treated
+                </span>
+                <Users className="h-4 w-4 text-[#118AB2]" />
+              </div>
+              <p className="mt-2 text-2xl font-extrabold">
+                {kpi.totalPatientsTreated?.total ?? 0}
+              </p>
+              <div className="mt-2.5 flex items-center justify-between border-t border-[#DDDCD4]/60 pt-2 text-[11px] font-bold">
+                <span className="text-[#118AB2]">
+                  New: {kpi.totalPatientsTreated?.newCases ?? 0}
+                </span>
+                <span className="text-emerald-600">
+                  Boosters: {kpi.totalPatientsTreated?.scheduledBoosters ?? 0}
+                </span>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border-2 border-red-400/70 bg-white p-4 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-extrabold uppercase tracking-wider text-red-600">
+                  Missed Follow-Ups
+                </span>
+                <PhoneMissed className="h-4 w-4 text-red-600" />
+              </div>
+              <div className="mt-2 flex items-baseline justify-between">
+                <p className="text-2xl font-extrabold text-red-600">
+                  {kpi.missedFollowUps?.count ?? 0}
+                </p>
+                <span className="rounded-full bg-red-600 px-2.5 py-0.5 text-[10px] font-extrabold text-white">
+                  {kpi.missedFollowUps?.cat3Count ?? 0} Cat III
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMissedDrawerOpen(true)}
+                className="mt-2.5 inline-flex w-full items-center justify-between border-t border-[#DDDCD4]/60 pt-2 text-[11px] font-extrabold text-red-600 hover:underline"
+              >
+                <span>Inspect Defaulter Roster &rarr;</span>
+              </button>
+            </div>
+
+            <div className="rounded-2xl border border-[#DDDCD4] bg-white p-4 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-extrabold uppercase tracking-wider opacity-75">
+                  PhilHealth ABTP
+                </span>
+                <FileSpreadsheet className="h-4 w-4 text-[#118AB2]" />
+              </div>
+              <p className="mt-2 text-2xl font-extrabold text-[#118AB2]">
+                {formatPhp(kpi.pendingPhilhealthAbtp?.amountPhp)}
+              </p>
+              <p className="mt-2.5 border-t border-[#DDDCD4]/60 pt-2 text-[11px] font-bold opacity-80">
+                {kpi.pendingPhilhealthAbtp?.claimsCount ?? 0} PRC-Validated Claims
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-[#DDDCD4] bg-white p-4 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-extrabold uppercase tracking-wider opacity-75">
+                  System Alerts
+                </span>
+                <BellRing className="h-4 w-4 text-amber-500" />
+              </div>
+              <p className="mt-2 text-2xl font-extrabold text-amber-600">
+                {kpi.activeSystemAlerts?.total ?? 0}
+              </p>
+              <div className="mt-2.5 flex flex-wrap gap-1.5 border-t border-[#DDDCD4]/60 pt-2 text-[10px] font-extrabold">
+                <span className="rounded bg-red-100 px-1.5 py-0.5 text-red-800">
+                  {kpi.activeSystemAlerts?.coldChainBreaches ?? 0} Cold-Chain
+                </span>
+                <span className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-900">
+                  {kpi.activeSystemAlerts?.lowStockBranches ?? 0} Stockout
+                </span>
+              </div>
+            </div>
+          </section>
+
+          {/* 7-Branch Comparison Matrix Table */}
+          <section className="rounded-3xl border border-[#DDDCD4] bg-white p-6 shadow-xs">
             <div className="flex flex-wrap items-center justify-between gap-2 pb-4">
               <div>
-                <span className="rounded-full bg-[#118AB2]/15 px-3 py-1 text-[11px] font-extrabold uppercase text-[#118AB2]">
-                  FEFO Auto-Rebalancing Engine
-                </span>
-                <h2 className="mt-1 text-lg font-extrabold">
-                  Recommended Inter-Branch PVRV Vial Transfers
+                <h2 className="text-lg font-extrabold">
+                  7-Branch Operational Comparison Matrix
                 </h2>
                 <p className="text-xs opacity-75">
-                  Automatically matches branches projected to stock out within 14 days with branches holding surplus near-expiry FEFO batches.
+                  Click any row or &ldquo;Inspect Branch&rdquo; to open its live operational detail drawer.
                 </p>
               </div>
             </div>
 
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[940px] border-collapse text-left text-xs">
+                <thead>
+                  <tr className="border-b border-[#DDDCD4] bg-[#F2F2ED] text-[11px] font-extrabold uppercase tracking-wider">
+                    <th className="rounded-tl-xl px-4 py-3">Official Branch</th>
+                    <th className="px-4 py-3">Daily Sales</th>
+                    <th className="px-4 py-3">Patients (New / Booster)</th>
+                    <th className="px-4 py-3">PVRV Vials Left</th>
+                    <th className="px-4 py-3">ERIG / HRIG Left</th>
+                    <th className="px-4 py-3">Cold-Chain (°C)</th>
+                    <th className="px-4 py-3">Vial Wastage</th>
+                    <th className="px-4 py-3">Audit Status</th>
+                    <th className="rounded-tr-xl px-4 py-3 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#DDDCD4]/70">
+                  {branchMatrix.map((row) => (
+                    <tr
+                      key={row.branch_id}
+                      onClick={() => setSelectedBranchRow(row)}
+                      className="cursor-pointer transition hover:bg-[#118AB2]/5"
+                    >
+                      <td className="px-4 py-3.5">
+                        <p className="font-extrabold">{row.short_name}</p>
+                        <p className="text-[11px] opacity-70">{row.phone}</p>
+                      </td>
+                      <td className="px-4 py-3.5 font-extrabold text-emerald-600">
+                        {formatPhp(row.dailySalesPhp)}
+                      </td>
+                      <td className="px-4 py-3.5 font-bold">
+                        <span className="text-[#118AB2]">{row.newCasesCount} New</span>
+                        <span className="mx-1.5 opacity-40">/</span>
+                        <span className="text-emerald-600">
+                          {row.boosterCount} Boosters
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <span
+                          className={`inline-flex rounded-full px-2.5 py-0.5 font-extrabold ${
+                            row.pvrvVialsLeft <= 25
+                              ? 'bg-red-100 text-red-800'
+                              : 'bg-emerald-100 text-emerald-800'
+                          }`}
+                        >
+                          {row.pvrvVialsLeft} vials
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5 font-extrabold">
+                        {row.erigHrigLeft} vials
+                      </td>
+                      <td className="px-4 py-3.5">
+                        {row.latestTempC !== null ? (
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 font-extrabold ${
+                              row.isColdChainBreach
+                                ? 'bg-red-600 text-white'
+                                : 'bg-emerald-100 text-emerald-900'
+                            }`}
+                          >
+                            <ThermometerSnowflake className="h-3.5 w-3.5" />
+                            <span>{row.latestTempC}°C</span>
+                          </span>
+                        ) : (
+                          <span className="opacity-60">No reading</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3.5 font-extrabold">
+                        {row.openVialWastageRatePct}%
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <span
+                          className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-extrabold ${
+                            row.auditStatus === 'Compliant'
+                              ? 'bg-emerald-100 text-emerald-900'
+                              : 'bg-red-100 text-red-900'
+                          }`}
+                        >
+                          {row.auditStatus}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5 text-right">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedBranchRow(row);
+                          }}
+                          className="inline-flex items-center gap-1 rounded-xl bg-[#118AB2]/10 px-3 py-1.5 text-[11px] font-extrabold text-[#118AB2] hover:bg-[#118AB2] hover:text-white"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                          <span>Inspect Branch</span>
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* =====================================================================
+          VIEW 2: INVENTORY & TRANSFERS (`activeTab === 'inventory'`)
+         ===================================================================== */}
+      {activeTab === 'inventory' && (
+        <div className="space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-[#DDDCD4] bg-white p-6 shadow-xs">
+            <div>
+              <span className="rounded-full bg-[#118AB2]/15 px-3 py-1 text-[11px] font-extrabold uppercase text-[#118AB2]">
+                14-Day Stockout &amp; Vial Yield Intelligence
+              </span>
+              <h1 className="mt-1.5 text-xl font-extrabold sm:text-2xl">
+                Predictive FEFO Rebalancing &amp; Multi-Dose Vial Yield
+              </h1>
+              <p className="text-xs opacity-75">
+                Calculates 14-day burn rates from scheduled Day 3, 7, 14, and 28 boosters and executes live inter-branch vial transfers.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setManualTransferOpen(true)}
+                className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-[#118AB2] px-4 py-2.5 text-xs font-extrabold text-white hover:bg-[#0D6E8E]"
+              >
+                <ArrowRightLeft className="h-4 w-4" />
+                <span>New Inter-Branch Transfer</span>
+              </button>
+              <button
+                type="button"
+                onClick={fetchCommandCenter}
+                disabled={loading}
+                className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-[#DDDCD4] bg-[#F2F2ED] px-4 py-2.5 text-xs font-extrabold"
+              >
+                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                <span>Refresh</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Recommended Inter-Branch Rebalancing Cards */}
+          <section className="rounded-3xl border-2 border-[#118AB2] bg-white p-6 shadow-xs">
+            <h2 className="text-base font-extrabold">
+              Recommended Inter-Branch FEFO Vial Transfers
+            </h2>
+            <p className="text-xs opacity-75">
+              One-click approval deducts vials from the donor branch, increments the recipient branch in Supabase, and writes an immutable audit log.
+            </p>
+
             {predictive.recommendations.length === 0 ? (
-              <div className="rounded-2xl border border-[#DDDCD4] p-6 text-center text-xs font-bold opacity-75">
-                All 7 branches currently exceed their 14-day projected booster demand. No inter-branch transfers required.
+              <div className="mt-4 rounded-2xl border border-[#DDDCD4] p-6 text-center text-xs font-bold opacity-75">
+                All 7 branches currently exceed their 14-day projected booster demand. Use &ldquo;New Inter-Branch Transfer&rdquo; above for custom transfers.
               </div>
             ) : (
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
                 {predictive.recommendations.map((rec) => (
                   <div
                     key={rec.id}
@@ -666,7 +697,7 @@ export function AdminDashboardPage() {
                         <ArrowRightLeft className="h-3.5 w-3.5" />
                         <span>
                           {transferringId === rec.id
-                            ? 'Transferring Stock...'
+                            ? 'Transferring in Supabase...'
                             : `Approve & Transfer ${rec.recommended_vials} Vials`}
                         </span>
                       </button>
@@ -677,58 +708,71 @@ export function AdminDashboardPage() {
             )}
           </section>
 
-          {/* 14-Day Burn Rate Table Across All 7 Branches */}
-          <section className="rounded-3xl border border-[#DDDCD4] bg-white p-5 shadow-xs">
-            <h3 className="text-base font-extrabold">
-              14-Day Scheduled PEP Booster Burn-Rate &amp; Stockout Projection
-            </h3>
+          {/* Combined 14-Day Burn Rate & Multi-Dose Vial Yield Table */}
+          <section className="rounded-3xl border border-[#DDDCD4] bg-white p-6 shadow-xs">
+            <h2 className="text-base font-extrabold">
+              14-Day Stockout Projection &amp; Multi-Dose Vial Yield by Branch
+            </h2>
             <div className="mt-4 overflow-x-auto">
-              <table className="w-full min-w-[860px] border-collapse text-left text-xs">
+              <table className="w-full min-w-[900px] border-collapse text-left text-xs">
                 <thead>
                   <tr className="border-b border-[#DDDCD4] bg-[#F2F2ED] text-[11px] font-extrabold uppercase">
                     <th className="px-3.5 py-3">Branch</th>
-                    <th className="px-3.5 py-3">Current PVRV Stock</th>
-                    <th className="px-3.5 py-3">Scheduled Boosters (14d)</th>
-                    <th className="px-3.5 py-3">Projected 14d Vial Need</th>
-                    <th className="px-3.5 py-3">Daily Burn Rate</th>
-                    <th className="px-3.5 py-3">Est. Days Until Stockout</th>
+                    <th className="px-3.5 py-3">PVRV Vials</th>
+                    <th className="px-3.5 py-3">14d Scheduled Boosters</th>
+                    <th className="px-3.5 py-3">Est. Days Left</th>
                     <th className="px-3.5 py-3">Near-Expiry (&le;60d)</th>
+                    <th className="px-3.5 py-3">Reconstituted ID Doses</th>
+                    <th className="px-3.5 py-3">Vial Yield / Wastage</th>
                     <th className="px-3.5 py-3">Risk Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#DDDCD4]/70">
-                  {predictive.branches.map((b) => (
-                    <tr key={b.branch_id}>
-                      <td className="px-3.5 py-3 font-extrabold">{b.short_name}</td>
-                      <td className="px-3.5 py-3 font-extrabold">{b.pvrvVialsLeft} vials</td>
-                      <td className="px-3.5 py-3 font-bold text-[#118AB2]">
-                        {b.scheduledBoosters14d} scheduled doses
-                      </td>
-                      <td className="px-3.5 py-3 font-bold">
-                        {b.projectedVialsNeeded14d} vials
-                      </td>
-                      <td className="px-3.5 py-3 font-mono">{b.dailyBurnVials} vials/day</td>
-                      <td className="px-3.5 py-3 font-extrabold">
-                        {b.estimatedDaysUntilStockout} days
-                      </td>
-                      <td className="px-3.5 py-3 font-bold text-amber-600">
-                        {b.nearExpiryVialsCount} vials
-                      </td>
-                      <td className="px-3.5 py-3">
-                        <span
-                          className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-extrabold uppercase ${
-                            b.riskLevel === 'critical'
-                              ? 'bg-red-600 text-white'
-                              : b.riskLevel === 'warning'
-                                ? 'bg-amber-100 text-amber-900'
-                                : 'bg-emerald-100 text-emerald-900'
-                          }`}
-                        >
-                          {b.riskLevel}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                  {predictive.branches.map((b) => {
+                    const y =
+                      vialYield.branches.find((v) => v.branch_id === b.branch_id) || {};
+                    return (
+                      <tr key={b.branch_id}>
+                        <td className="px-3.5 py-3 font-extrabold">{b.short_name}</td>
+                        <td className="px-3.5 py-3 font-extrabold">
+                          {b.pvrvVialsLeft} vials
+                        </td>
+                        <td className="px-3.5 py-3 font-bold text-[#118AB2]">
+                          {b.scheduledBoosters14d} doses
+                        </td>
+                        <td className="px-3.5 py-3 font-extrabold">
+                          {b.estimatedDaysUntilStockout} days
+                        </td>
+                        <td className="px-3.5 py-3 font-bold text-amber-600">
+                          {b.nearExpiryVialsCount} vials
+                        </td>
+                        <td className="px-3.5 py-3 font-bold">
+                          {y.administeredDoses ?? 0} used / {y.totalDosesCapacity ?? 0} cap
+                        </td>
+                        <td className="px-3.5 py-3">
+                          <span className="font-extrabold text-emerald-600">
+                            {y.yieldRatePct ?? 100}% yield
+                          </span>
+                          <span className="ml-1.5 text-[11px] text-red-600">
+                            ({y.wastageRatePct ?? 0}% waste)
+                          </span>
+                        </td>
+                        <td className="px-3.5 py-3">
+                          <span
+                            className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-extrabold uppercase ${
+                              b.riskLevel === 'critical'
+                                ? 'bg-red-600 text-white'
+                                : b.riskLevel === 'warning'
+                                  ? 'bg-amber-100 text-amber-900'
+                                  : 'bg-emerald-100 text-emerald-900'
+                            }`}
+                          >
+                            {b.riskLevel}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -736,93 +780,21 @@ export function AdminDashboardPage() {
         </div>
       )}
 
-      {/* TAB 3: MULTI-DOSE VIAL YIELD & SHRINKAGE INTELLIGENCE */}
-      {activeTab === 'yield' && (
-        <div className="space-y-6">
-          <section className="rounded-3xl border border-[#DDDCD4] bg-white p-5 shadow-xs">
-            <div className="flex flex-wrap items-center justify-between gap-2 pb-4">
-              <div>
-                <h2 className="text-lg font-extrabold">
-                  Multi-Dose PVRV Vial Yield &amp; Shrinkage Intelligence
-                </h2>
-                <p className="text-xs opacity-75">
-                  Compares reconstituted 6-hour multi-dose PVRV vials (5 ID doses/vial) against actual administered ID doses and discard wastage.
-                </p>
-              </div>
-              <div className="flex items-center gap-3 text-xs font-extrabold">
-                <span className="rounded-xl bg-emerald-100 px-3 py-1.5 text-emerald-900">
-                  Administered: {vialYield.networkAdministeredDoses} ID Doses
-                </span>
-                <span className="rounded-xl bg-red-100 px-3 py-1.5 text-red-900">
-                  Wasted: {vialYield.networkWastedDoses} ID Doses
-                </span>
-              </div>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[820px] border-collapse text-left text-xs">
-                <thead>
-                  <tr className="border-b border-[#DDDCD4] bg-[#F2F2ED] text-[11px] font-extrabold uppercase">
-                    <th className="px-3.5 py-3">Branch</th>
-                    <th className="px-3.5 py-3">Vials Reconstituted</th>
-                    <th className="px-3.5 py-3">Total ID Dose Capacity</th>
-                    <th className="px-3.5 py-3">Administered ID Doses</th>
-                    <th className="px-3.5 py-3">6-Hr Expired / Wasted</th>
-                    <th className="px-3.5 py-3">Yield Efficiency (%)</th>
-                    <th className="px-3.5 py-3">Wastage Rate (%)</th>
-                    <th className="px-3.5 py-3">Shrinkage Flag</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#DDDCD4]/70">
-                  {vialYield.branches.map((b) => (
-                    <tr key={b.branch_id}>
-                      <td className="px-3.5 py-3 font-extrabold">{b.short_name}</td>
-                      <td className="px-3.5 py-3 font-bold">{b.vialsOpenedCount} vials</td>
-                      <td className="px-3.5 py-3">{b.totalDosesCapacity} doses</td>
-                      <td className="px-3.5 py-3 font-extrabold text-emerald-600">
-                        {b.administeredDoses} doses
-                      </td>
-                      <td className="px-3.5 py-3 font-extrabold text-red-600">
-                        {b.wastedDoses} doses
-                      </td>
-                      <td className="px-3.5 py-3 font-extrabold text-[#118AB2]">
-                        {b.yieldRatePct}%
-                      </td>
-                      <td className="px-3.5 py-3 font-extrabold">
-                        {b.wastageRatePct}%
-                      </td>
-                      <td className="px-3.5 py-3">
-                        <span
-                          className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-extrabold ${
-                            b.isHighWastageFlag
-                              ? 'bg-red-100 text-red-900'
-                              : 'bg-emerald-100 text-emerald-900'
-                          }`}
-                        >
-                          {b.isHighWastageFlag
-                            ? 'Elevated Wastage / Variance'
-                            : 'Optimal Yield'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        </div>
-      )}
-
-      {/* TAB 4: STAFF GOVERNANCE & PRC LICENSE EXPIRATION MONITOR */}
+      {/* =====================================================================
+          VIEW 3: STAFF & PRC GOVERNANCE (`activeTab === 'staff'`)
+         ===================================================================== */}
       {activeTab === 'staff' && (
-        <section className="rounded-3xl border border-[#DDDCD4] bg-white p-5 shadow-xs">
-          <div className="flex flex-wrap items-center justify-between gap-3 pb-4">
+        <section className="rounded-3xl border border-[#DDDCD4] bg-white p-6 shadow-xs">
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-5">
             <div>
-              <h2 className="text-lg font-extrabold">
-                Staff Branch Assignments &amp; PRC License Governance
-              </h2>
+              <span className="rounded-full bg-[#118AB2]/15 px-3 py-1 text-[11px] font-extrabold uppercase text-[#118AB2]">
+                Staff &amp; Credential Governance
+              </span>
+              <h1 className="mt-1.5 text-xl font-extrabold sm:text-2xl">
+                Branch Assignments &amp; PRC License Expiration Monitor
+              </h1>
               <p className="text-xs opacity-75">
-                Strict branch lock enforcement for Doctors &amp; Nurses with real-time PRC credential expiration tracking.
+                Assign Doctors and Nurses to locked branches and update PRC license numbers and expiration dates in Supabase.
               </p>
             </div>
 
@@ -831,7 +803,7 @@ export function AdminDashboardPage() {
                 value={staffBranchFilter}
                 onChange={(e) => setStaffBranchFilter(e.target.value)}
                 aria-label="Filter staff by branch"
-                className="min-h-[42px] rounded-xl border border-[#DDDCD4] bg-[#F2F2ED] px-3 py-2 text-xs font-extrabold"
+                className="min-h-[44px] rounded-xl border border-[#DDDCD4] bg-[#F2F2ED] px-3.5 py-2 text-xs font-extrabold"
               >
                 <option value="all">All 7 Official Branches</option>
                 {OFFICIAL_BRANCHES.map((b) => (
@@ -844,7 +816,7 @@ export function AdminDashboardPage() {
               <button
                 type="button"
                 onClick={openAddStaffModal}
-                className="inline-flex min-h-[42px] items-center gap-1.5 rounded-xl bg-[#118AB2] px-4 py-2 text-xs font-extrabold text-white hover:bg-[#0D6E8E]"
+                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl bg-[#118AB2] px-4 py-2.5 text-xs font-extrabold text-white hover:bg-[#0D6E8E]"
               >
                 <Plus className="h-4 w-4" />
                 <span>Provision Staff Account</span>
@@ -853,7 +825,7 @@ export function AdminDashboardPage() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[860px] border-collapse text-left text-xs">
+            <table className="w-full min-w-[880px] border-collapse text-left text-xs">
               <thead>
                 <tr className="border-b border-[#DDDCD4] bg-[#F2F2ED] text-[11px] font-extrabold uppercase">
                   <th className="px-3.5 py-3">Staff Member</th>
@@ -861,35 +833,35 @@ export function AdminDashboardPage() {
                   <th className="px-3.5 py-3">Locked Branch Assignment</th>
                   <th className="px-3.5 py-3">PRC License No.</th>
                   <th className="px-3.5 py-3">PRC Expiry Date</th>
-                  <th className="px-3.5 py-3">Credential Status</th>
-                  <th className="px-3.5 py-3 text-right">Governance</th>
+                  <th className="px-3.5 py-3">PRC Status</th>
+                  <th className="px-3.5 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#DDDCD4]/70">
                 {filteredStaff.map((member) => (
                   <tr key={member.id}>
-                    <td className="px-3.5 py-3">
+                    <td className="px-3.5 py-3.5">
                       <p className="font-extrabold">{member.full_name}</p>
                       <p className="font-mono text-[11px] opacity-75">{member.email}</p>
                     </td>
-                    <td className="px-3.5 py-3">
+                    <td className="px-3.5 py-3.5">
                       <span className="rounded-full bg-[#118AB2]/15 px-2.5 py-0.5 text-[11px] font-extrabold uppercase text-[#118AB2]">
                         {member.role}
                       </span>
                     </td>
-                    <td className="px-3.5 py-3 font-bold">
+                    <td className="px-3.5 py-3.5 font-bold">
                       <span className="inline-flex items-center gap-1">
                         <Lock className="h-3 w-3 text-[#118AB2]" />
                         <span>{member.branch_name}</span>
                       </span>
                     </td>
-                    <td className="px-3.5 py-3 font-mono font-extrabold">
+                    <td className="px-3.5 py-3.5 font-mono font-extrabold">
                       {member.prc_license_number || '—'}
                     </td>
-                    <td className="px-3.5 py-3 font-bold">
+                    <td className="px-3.5 py-3.5 font-bold">
                       {member.prc_expiry_date || '—'}
                     </td>
-                    <td className="px-3.5 py-3">
+                    <td className="px-3.5 py-3.5">
                       <span
                         className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-extrabold uppercase ${
                           member.prcStatus === 'expired'
@@ -904,15 +876,34 @@ export function AdminDashboardPage() {
                           : member.prcStatus}
                       </span>
                     </td>
-                    <td className="px-3.5 py-3 text-right">
-                      <button
-                        type="button"
-                        onClick={() => openEditStaffModal(member)}
-                        className="inline-flex items-center gap-1 rounded-xl border border-[#DDDCD4] px-3 py-1.5 text-[11px] font-extrabold hover:border-[#118AB2]"
-                      >
-                        <Edit3 className="h-3.5 w-3.5" />
-                        <span>Edit / Reassign</span>
-                      </button>
+                    <td className="px-3.5 py-3.5 text-right">
+                      <div className="inline-flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openEditStaffModal(member)}
+                          className="inline-flex items-center gap-1 rounded-xl border border-[#DDDCD4] px-3 py-1.5 text-[11px] font-extrabold hover:border-[#118AB2]"
+                        >
+                          <Edit3 className="h-3.5 w-3.5" />
+                          <span>Edit / Reassign</span>
+                        </button>
+                        {member.role !== 'admin' && (
+                          <button
+                            type="button"
+                            disabled={togglingStaffId === member.id}
+                            onClick={() => handleToggleStaffActive(member)}
+                            className={`inline-flex items-center gap-1 rounded-xl px-3 py-1.5 text-[11px] font-extrabold ${
+                              member.is_active !== false
+                                ? 'bg-amber-100 text-amber-900 hover:bg-amber-200'
+                                : 'bg-emerald-100 text-emerald-900 hover:bg-emerald-200'
+                            }`}
+                          >
+                            <Power className="h-3.5 w-3.5" />
+                            <span>
+                              {member.is_active !== false ? 'Deactivate' : 'Activate'}
+                            </span>
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -922,16 +913,21 @@ export function AdminDashboardPage() {
         </section>
       )}
 
-      {/* TAB 5: IMMUTABLE SENSITIVE ACTION AUDIT LOG */}
+      {/* =====================================================================
+          VIEW 4: IMMUTABLE AUDIT LOG (`activeTab === 'audit'`)
+         ===================================================================== */}
       {activeTab === 'audit' && (
-        <section className="rounded-3xl border border-[#DDDCD4] bg-white p-5 shadow-xs">
-          <div className="flex flex-wrap items-center justify-between gap-3 pb-4">
+        <section className="rounded-3xl border border-[#DDDCD4] bg-white p-6 shadow-xs">
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-5">
             <div>
-              <h2 className="text-lg font-extrabold">
+              <span className="rounded-full bg-[#118AB2]/15 px-3 py-1 text-[11px] font-extrabold uppercase text-[#118AB2]">
+                Compliance &amp; Governance Ledger
+              </span>
+              <h1 className="mt-1.5 text-xl font-extrabold sm:text-2xl">
                 Immutable Sensitive Action Audit Log
-              </h2>
+              </h1>
               <p className="text-xs opacity-75">
-                Append-only compliance ledger for AI overrides, electronic PRC sign-offs, cold-chain breaches, discounts, and stock transfers.
+                Live append-only record of AI overrides, electronic PRC sign-offs, cold-chain breaches, and inter-branch stock transfers.
               </p>
             </div>
 
@@ -940,7 +936,7 @@ export function AdminDashboardPage() {
                 value={auditFilter}
                 onChange={(e) => setAuditFilter(e.target.value)}
                 aria-label="Filter audit log by action type"
-                className="min-h-[42px] rounded-xl border border-[#DDDCD4] bg-[#F2F2ED] px-3 py-2 text-xs font-extrabold"
+                className="min-h-[44px] rounded-xl border border-[#DDDCD4] bg-[#F2F2ED] px-3.5 py-2 text-xs font-extrabold"
               >
                 {actionTypes.map((type) => (
                   <option key={type} value={type}>
@@ -951,11 +947,21 @@ export function AdminDashboardPage() {
 
               <button
                 type="button"
+                onClick={fetchCommandCenter}
+                disabled={loading}
+                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-[#DDDCD4] bg-[#F2F2ED] px-3.5 py-2 text-xs font-extrabold"
+              >
+                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                <span>Refresh</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={handleExportAuditCsv}
-                className="inline-flex min-h-[42px] items-center gap-1.5 rounded-xl bg-[#464B71] px-4 py-2 text-xs font-extrabold text-white hover:bg-[#343857]"
+                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl bg-[#464B71] px-4 py-2 text-xs font-extrabold text-white hover:bg-[#343857]"
               >
                 <Download className="h-4 w-4" />
-                <span>Export Audit CSV</span>
+                <span>Export CSV</span>
               </button>
             </div>
           </div>
@@ -1013,7 +1019,7 @@ export function AdminDashboardPage() {
             <div className="flex items-start justify-between gap-3 border-b border-[#DDDCD4] pb-4">
               <div>
                 <span className="rounded-full bg-[#118AB2]/15 px-2.5 py-0.5 text-[10px] font-extrabold uppercase text-[#118AB2]">
-                  Read-Only Operational Drill-Down
+                  Branch Operational Drill-Down
                 </span>
                 <h2 className="mt-1 text-xl font-extrabold">
                   {selectedBranchRow.branch_name}
@@ -1026,6 +1032,7 @@ export function AdminDashboardPage() {
                 type="button"
                 onClick={() => setSelectedBranchRow(null)}
                 className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#DDDCD4]"
+                aria-label="Close branch drill-down"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -1061,7 +1068,6 @@ export function AdminDashboardPage() {
                 </div>
               </div>
 
-              {/* Branch Clinical Cases */}
               <div>
                 <h3 className="font-extrabold uppercase tracking-wider text-[#118AB2]">
                   Active &amp; Recent Clinical Cases ({selectedBranchRow.drillDown?.cases?.length || 0})
@@ -1088,7 +1094,6 @@ export function AdminDashboardPage() {
                 </div>
               </div>
 
-              {/* Branch FEFO Inventory Batches */}
               <div>
                 <h3 className="font-extrabold uppercase tracking-wider text-[#118AB2]">
                   Live FEFO Inventory Batches
@@ -1111,7 +1116,6 @@ export function AdminDashboardPage() {
                 </div>
               </div>
 
-              {/* Branch Assigned Staff */}
               <div>
                 <h3 className="font-extrabold uppercase tracking-wider text-[#118AB2]">
                   Assigned Clinic Staff
@@ -1137,6 +1141,124 @@ export function AdminDashboardPage() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MANUAL INTER-BRANCH TRANSFER MODAL */}
+      {manualTransferOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Execute Inter-Branch FEFO Vial Transfer"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-xs"
+        >
+          <div className="w-full max-w-md rounded-3xl border border-[#DDDCD4] bg-white p-6 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[#DDDCD4] pb-3">
+              <h2 className="text-base font-extrabold">
+                Execute Inter-Branch PVRV Vial Transfer
+              </h2>
+              <button
+                type="button"
+                onClick={() => setManualTransferOpen(false)}
+                className="rounded-xl border border-[#DDDCD4] p-1.5"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <form onSubmit={handleManualTransferSubmit} className="mt-4 space-y-3 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-extrabold">From Donor Branch</label>
+                  <select
+                    value={manualTransferForm.from_branch_id}
+                    onChange={(e) =>
+                      setManualTransferForm({
+                        ...manualTransferForm,
+                        from_branch_id: e.target.value,
+                      })
+                    }
+                    className="mt-1 min-h-[42px] w-full rounded-xl border border-[#DDDCD4] px-3 py-2 font-extrabold"
+                  >
+                    {OFFICIAL_BRANCHES.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.shortName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-extrabold">To Recipient Branch</label>
+                  <select
+                    value={manualTransferForm.to_branch_id}
+                    onChange={(e) =>
+                      setManualTransferForm({
+                        ...manualTransferForm,
+                        to_branch_id: e.target.value,
+                      })
+                    }
+                    className="mt-1 min-h-[42px] w-full rounded-xl border border-[#DDDCD4] px-3 py-2 font-extrabold"
+                  >
+                    {OFFICIAL_BRANCHES.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.shortName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-extrabold">Vials to Transfer (FEFO)</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={50}
+                  required
+                  value={manualTransferForm.vials_count}
+                  onChange={(e) =>
+                    setManualTransferForm({
+                      ...manualTransferForm,
+                      vials_count: e.target.value,
+                    })
+                  }
+                  className="mt-1 min-h-[42px] w-full rounded-xl border border-[#DDDCD4] px-3 py-2 font-extrabold"
+                />
+              </div>
+
+              <div>
+                <label className="block font-extrabold">Transfer Audit Reason</label>
+                <textarea
+                  rows={2}
+                  required
+                  value={manualTransferForm.reason}
+                  onChange={(e) =>
+                    setManualTransferForm({
+                      ...manualTransferForm,
+                      reason: e.target.value,
+                    })
+                  }
+                  className="mt-1 w-full rounded-xl border border-[#DDDCD4] p-3 font-semibold"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setManualTransferOpen(false)}
+                  className="min-h-[42px] rounded-xl border border-[#DDDCD4] px-4 py-2 font-extrabold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={transferringId === 'manual'}
+                  className="min-h-[42px] rounded-xl bg-[#118AB2] px-5 py-2 font-extrabold text-white hover:bg-[#0D6E8E]"
+                >
+                  {transferringId === 'manual' ? 'Transferring...' : 'Execute Transfer'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -103,15 +103,15 @@ export function PublicNavbar() {
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-white/15 bg-[#464B71] text-white shadow-md">
-      <div className="flex min-h-[84px] w-full items-center justify-between gap-4 px-4 py-2.5 sm:px-6 lg:min-h-[92px] lg:px-10 xl:px-14">
-        {/* Left Group: Logo + Minimal Public "You are in:" Branch Selector */}
+      <div className="flex min-h-[90px] w-full items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:min-h-[104px] lg:px-10 xl:px-14">
+        {/* Left Group: Noticeably Larger, Crisper Logo + Minimal Public "You are in:" Branch Selector */}
         <div className="relative flex shrink-0 flex-col items-start" ref={branchDropdownRef}>
-          <div className="flex items-center gap-2 sm:gap-2.5">
+          <div className="flex items-center gap-3 sm:gap-3.5">
             <Link
               to="/"
-              className="group flex shrink-0 items-center gap-2.5 rounded-xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#118AB2]"
+              className="group flex shrink-0 items-center gap-3.5 rounded-2xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#118AB2]"
             >
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 border-[#7CD5C7] bg-white p-0.5 shadow-md transition group-hover:scale-105 sm:h-12 sm:w-12">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border-[3px] border-[#7CD5C7] bg-white p-0.5 shadow-lg transition group-hover:scale-105 sm:h-16 sm:w-16 lg:h-[68px] lg:w-[68px]">
                 <img
                   src="/victorio_logo.jpg"
                   alt="Victorio Animal Bite Center Logo"
@@ -119,10 +119,10 @@ export function PublicNavbar() {
                 />
               </div>
               <div>
-                <span className="block text-base font-extrabold tracking-tight text-white whitespace-nowrap sm:text-xl">
+                <span className="block text-lg font-extrabold tracking-tight text-white whitespace-nowrap sm:text-2xl lg:text-[26px]">
                   Victorio ABC
                 </span>
-                <span className="block text-[11px] font-semibold text-[#7CD5C7] whitespace-nowrap sm:text-xs">
+                <span className="block text-xs font-bold text-[#7CD5C7] whitespace-nowrap sm:text-sm">
                   Animal Bite Center
                 </span>
               </div>

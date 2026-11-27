@@ -1,13 +1,14 @@
 import axios from 'axios';
 import { supabase } from './supabase';
-import { BRANCH_STORAGE_KEY, DEFAULT_BRANCH_SLUG, getBranchBySlug } from '../config/branches';
-
-const defaultApiUrl = import.meta.env.PROD
-  ? '/api/v1'
-  : 'http://localhost:5000/api/v1';
+import {
+  BRANCH_STORAGE_KEY,
+  DEFAULT_BRANCH_SLUG,
+  getBranchBySlug,
+  resolveRuntimeApiBaseUrl,
+} from '../config/branches';
 
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || defaultApiUrl,
+  baseURL: resolveRuntimeApiBaseUrl(),
   headers: {
     'Content-Type': 'application/json',
   },
@@ -15,6 +16,7 @@ export const api = axios.create({
 
 api.interceptors.request.use(async (config) => {
   try {
+    config.baseURL = resolveRuntimeApiBaseUrl();
     const activeSlug =
       typeof window !== 'undefined'
         ? window.localStorage.getItem(BRANCH_STORAGE_KEY) || DEFAULT_BRANCH_SLUG
@@ -26,9 +28,6 @@ api.interceptors.request.use(async (config) => {
     if (branchObj?.slug) {
       config.headers['X-Branch-Slug'] = branchObj.slug;
       config.headers['X-Server-Tenant-Id'] = branchObj.serverTenantId;
-    }
-    if (branchObj?.apiBaseUrl && !import.meta.env.VITE_API_URL) {
-      config.baseURL = branchObj.apiBaseUrl;
     }
   } catch {
     // Ignore storage read errors
@@ -46,7 +45,20 @@ api.interceptors.request.use(async (config) => {
 
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
+    const originalConfig = error?.config;
+    // If local devVITE_API_URL pointed to localhost:5000 and connection refused, retry once against same-origin /api/v1
+    if (
+      originalConfig &&
+      !originalConfig.__retriedSameOrigin &&
+      !error?.response &&
+      String(originalConfig.baseURL || '').includes('localhost:5000')
+    ) {
+      originalConfig.__retriedSameOrigin = true;
+      originalConfig.baseURL = '/api/v1';
+      return api.request(originalConfig);
+    }
+
     const serverMessage =
       error?.response?.data?.error ||
       error?.response?.data?.message ||

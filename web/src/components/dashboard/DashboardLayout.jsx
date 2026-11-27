@@ -7,17 +7,13 @@ import {
   useSearchParams,
 } from 'react-router-dom';
 import {
-  LayoutDashboard,
   Building2,
   TrendingUp,
-  FlaskConical,
   ShieldCheck,
   FileCheck2,
   ScanEye,
   Calculator,
   AlertTriangle,
-  Stamp,
-  Timer,
   Users,
   Syringe,
   ThermometerSnowflake,
@@ -36,6 +32,7 @@ import {
   Volume2,
   ChevronLeft,
   ChevronRight,
+  Save,
 } from 'lucide-react';
 import { useAuth, ROLES, getRoleHome } from '../../context/AuthContext';
 import { getBranchBySlug, formatBranchLabel } from '../../config/branches';
@@ -43,101 +40,433 @@ import { supabase } from '../../lib/supabase';
 import api from '../../lib/api';
 import { BufferLoader } from '../ui/BufferLoader';
 
+/**
+ * Phase 2.3.1 Decluttered Sidebar Navigation (4–5 Focused Views per Role):
+ * - Admin (Owner): Overview & 7-Branch Matrix, Inventory & Transfers, Staff & PRC, Audit Log, Settings
+ * - Doctor (Branch-Locked): AI Triage Queue, Patient Dosing & Sign-Off, High-Risk & AEFI, Settings
+ * - Nurse (Branch-Locked): Triage & Boosters, Open-Vial & FEFO, Cold-Chain & Defaulters, Settings
+ */
 const ROLE_MODULES = {
   [ROLES.ADMIN]: [
     {
       tab: 'matrix',
-      label: '7-Branch Matrix & KPIs',
+      label: 'Overview & 7-Branch Matrix',
       icon: Building2,
-      subtitle: 'Network daily sales, patients & cold-chain overview',
+      subtitle: 'Network KPIs, daily sales & 7-branch drill-down',
     },
     {
-      tab: 'predictive',
-      label: '14-Day Stockout & Rebalance',
+      tab: 'inventory',
+      label: 'Inventory & Transfers',
       icon: TrendingUp,
-      subtitle: 'Booster burn-rate engine & inter-branch transfers',
-    },
-    {
-      tab: 'yield',
-      label: 'Multi-Dose Vial Yield',
-      icon: FlaskConical,
-      subtitle: '6-hr PVRV vial utilization & shrinkage analytics',
+      subtitle: '14-day stockout rebalance & multi-dose vial yield',
     },
     {
       tab: 'staff',
-      label: 'Staff & PRC Governance',
+      label: 'Staff & PRC',
       icon: ShieldCheck,
-      subtitle: 'Branch assignments & PRC license expiration monitor',
+      subtitle: 'Branch assignments & PRC credential expiration',
     },
     {
       tab: 'audit',
-      label: 'Immutable Audit Log',
+      label: 'Audit Log',
       icon: FileCheck2,
-      subtitle: 'Sensitive actions, overrides, sign-offs & breaches',
+      subtitle: 'Immutable ledger of clinical & stock actions',
+    },
+    {
+      tab: 'settings',
+      label: 'Settings',
+      icon: Settings,
+      subtitle: 'Theme, profile credentials & alert preferences',
     },
   ],
   [ROLES.DOCTOR]: [
     {
       tab: 'ai_queue',
-      label: 'AI Classifier Queue',
+      label: 'AI Triage Queue',
       icon: ScanEye,
       subtitle: 'Human-in-the-loop wound photo verification',
     },
     {
       tab: 'dosing',
-      label: 'Weight Dosing & Guardrails',
+      label: 'Patient Dosing & Sign-Off',
       icon: Calculator,
-      subtitle: 'ERIG 40 IU/kg, HRIG 20 IU/kg & 2-dose booster engine',
+      subtitle: 'Weight ERIG/HRIG calculator & PRC ABTP stamp',
     },
     {
       tab: 'cat3',
-      label: 'High-Risk Cat III & AEFI',
+      label: 'High-Risk & AEFI',
       icon: AlertTriangle,
-      subtitle: 'Cranial/hand exposures & AEFI surveillance',
+      subtitle: 'Category III surveillance & AEFI reporting',
     },
     {
-      tab: 'signoff',
-      label: 'PRC Sign-Off & ABTP',
-      icon: Stamp,
-      subtitle: 'Electronic PRC stamping & PhilHealth ABTP registry',
+      tab: 'settings',
+      label: 'Settings',
+      icon: Settings,
+      subtitle: 'Theme, PRC credentials & password security',
     },
   ],
   [ROLES.NURSE]: [
     {
-      tab: 'vials',
-      label: '6-Hr Open-Vial Timer',
-      icon: Timer,
-      subtitle: 'Multi-dose PVRV countdown & ID queue optimizer',
-    },
-    {
       tab: 'triage',
-      label: 'Walk-In & Booster Feed',
+      label: 'Triage & Boosters',
       icon: Users,
-      subtitle: 'Mobile AI walk-in triage vs Day 3/7/14/28 boosters',
+      subtitle: 'Walk-in intake & scheduled Day 3/7/14/28 doses',
     },
     {
       tab: 'fefo',
-      label: 'FEFO Dose Logger',
+      label: 'Open-Vial & FEFO',
       icon: Syringe,
-      subtitle: 'First-Expiry First-Out batch lock & PRC stamp',
+      subtitle: '6-hour vial countdown & FEFO batch dose logger',
     },
     {
       tab: 'defaulters',
-      label: 'Defaulters & Cold-Chain',
+      label: 'Cold-Chain & Defaulters',
       icon: ThermometerSnowflake,
-      subtitle: 'Cat III priority callbacks & 2.0°C–8.0°C shift log',
+      subtitle: '2.0°C–8.0°C shift log & Cat III callback queue',
+    },
+    {
+      tab: 'settings',
+      label: 'Settings',
+      icon: Settings,
+      subtitle: 'Theme, PRC credentials & alert preferences',
     },
   ],
 };
 
-/**
- * Unified, distraction-free medical-executive shell for Owner, Doctor, and Nurse workspaces:
- * - Strictly NO branch-switcher dropdown and NO public navbar/footer inside dashboards.
- * - Locked, read-only Role Badge & Assigned Branch Indicator.
- * - Live DB-driven Notification Center with click-to-jump and Mark All as Read.
- * - Persistent Light / Dark Mode toggle + Settings Modal/Drawer (`/settings` view) with
- *   Profile & PRC Credentials, Change Password, and Notification Preferences.
- */
+function WorkspaceSettingsView({
+  profile,
+  role,
+  branchLabel,
+  isDark,
+  updatePreferences,
+  notificationPrefs,
+}) {
+  const [fullName, setFullName] = useState(profile?.full_name || '');
+  const [prcNumber, setPrcNumber] = useState(profile?.prc_license_number || '');
+  const [prcExpiry, setPrcExpiry] = useState(profile?.prc_expiry_date || '2028-06-30');
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileMsg, setProfileMsg] = useState(null);
+
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordStatus, setPasswordStatus] = useState({ type: '', text: '' });
+  const [passwordSaving, setPasswordSaving] = useState(false);
+
+  const [prefsSaving, setPrefsSaving] = useState(false);
+  const [prefsSavedNotice, setPrefsSavedNotice] = useState(false);
+
+  const handleSaveProfileCredentials = async (e) => {
+    e.preventDefault();
+    setProfileSaving(true);
+    setProfileMsg(null);
+    try {
+      await api.patch('/profile/preferences', {
+        full_name: fullName,
+        prc_license_number: prcNumber,
+        prc_expiry_date: prcExpiry,
+      });
+      setProfileMsg({
+        type: 'success',
+        text: 'Profile & PRC credentials saved to Supabase.',
+      });
+    } catch (err) {
+      setProfileMsg({
+        type: 'error',
+        text: err?.userMessage || err?.message || 'Failed to update profile credentials.',
+      });
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
+  const handleToggleNotifPref = async (key) => {
+    setPrefsSaving(true);
+    setPrefsSavedNotice(false);
+    try {
+      const nextPrefs = {
+        ...notificationPrefs,
+        [key]: !notificationPrefs[key],
+      };
+      await updatePreferences({ notification_prefs: nextPrefs });
+      setPrefsSavedNotice(true);
+      setTimeout(() => setPrefsSavedNotice(false), 2200);
+    } finally {
+      setPrefsSaving(false);
+    }
+  };
+
+  const handlePasswordChange = async (e) => {
+    e.preventDefault();
+    setPasswordStatus({ type: '', text: '' });
+
+    if (!newPassword || newPassword.length < 8) {
+      setPasswordStatus({
+        type: 'error',
+        text: 'New password must be at least 8 characters long.',
+      });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordStatus({
+        type: 'error',
+        text: 'New password and confirmation do not match.',
+      });
+      return;
+    }
+
+    setPasswordSaving(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) {
+        setPasswordStatus({ type: 'error', text: error.message });
+      } else {
+        setPasswordStatus({
+          type: 'success',
+          text: 'Password updated cleanly in Supabase Auth.',
+        });
+        setNewPassword('');
+        setConfirmPassword('');
+      }
+    } catch (err) {
+      setPasswordStatus({
+        type: 'error',
+        text: err?.message || 'Failed to update password.',
+      });
+    } finally {
+      setPasswordSaving(false);
+    }
+  };
+
+  return (
+    <div className="mx-auto max-w-5xl space-y-6">
+      <div className="rounded-3xl border border-[#DDDCD4] bg-white p-6 shadow-xs">
+        <span className="rounded-full bg-[#118AB2]/15 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-[#118AB2]">
+          Workspace Settings &amp; Security
+        </span>
+        <h1 className="mt-1.5 text-2xl font-extrabold">
+          Clinical Profile, Theme &amp; Notification Preferences
+        </h1>
+        <p className="mt-1 text-xs opacity-75">
+          All preferences persist directly to your Supabase profile and local workspace session.
+        </p>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* 1. Theme & Notification Preferences */}
+        <div className="space-y-6">
+          <section className="rounded-3xl border border-[#DDDCD4] bg-white p-6 shadow-xs">
+            <h2 className="text-base font-extrabold">1. Workspace Appearance</h2>
+            <p className="mt-0.5 text-xs opacity-75">
+              Applies high-contrast slate-navy dark mode to your clinical workspace while keeping the public website in its default light theme.
+            </p>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => updatePreferences({ theme_preference: 'light' })}
+                className={`flex min-h-[52px] items-center justify-center gap-2 rounded-xl border-2 px-4 py-3 text-xs font-extrabold transition ${
+                  !isDark
+                    ? 'border-[#118AB2] bg-[#118AB2]/10 text-[#464B71]'
+                    : 'border-slate-700 bg-slate-800/60 text-slate-300'
+                }`}
+              >
+                <Sun className="h-4 w-4 text-amber-500" />
+                <span>Clinical Light Mode</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => updatePreferences({ theme_preference: 'dark' })}
+                className={`flex min-h-[52px] items-center justify-center gap-2 rounded-xl border-2 px-4 py-3 text-xs font-extrabold transition ${
+                  isDark
+                    ? 'border-[#7CD5C7] bg-[#0F172A] text-[#7CD5C7]'
+                    : 'border-[#DDDCD4] bg-[#F2F2ED] text-[#464B71]'
+                }`}
+              >
+                <Moon className="h-4 w-4 text-[#118AB2]" />
+                <span>Slate-Navy Dark Mode</span>
+              </button>
+            </div>
+          </section>
+
+          <section className="rounded-3xl border border-[#DDDCD4] bg-white p-6 shadow-xs">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-extrabold">
+                2. Real-Time Clinical Alert Toggles
+              </h2>
+              {prefsSavedNotice && (
+                <span className="inline-flex items-center gap-1 text-xs font-extrabold text-emerald-600">
+                  <CheckCircle2 className="h-4 w-4" />
+                  <span>Saved to Supabase</span>
+                </span>
+              )}
+            </div>
+            <div className="mt-4 space-y-2.5">
+              {[
+                {
+                  key: 'critical_clinical',
+                  label: 'High-Risk Cat III AI Uploads & Overdue Boosters',
+                },
+                {
+                  key: 'cold_chain',
+                  label: 'Cold-Chain Temperature Breach Escalations (2.0°C–8.0°C)',
+                },
+                {
+                  key: 'inventory_alerts',
+                  label: '6-Hr Open-Vial Expiry & 14-Day Stockout Warnings',
+                },
+                {
+                  key: 'sound_alerts',
+                  label: 'Visual & Audible Priority Chime on Critical Alerts',
+                },
+              ].map((item) => (
+                <label
+                  key={item.key}
+                  className="flex cursor-pointer items-center justify-between rounded-xl border border-[#DDDCD4] bg-[#F2F2ED]/60 px-4 py-3 text-xs font-bold"
+                >
+                  <span className="flex items-center gap-2.5 pr-2">
+                    <Volume2 className="h-4 w-4 shrink-0 text-[#118AB2]" />
+                    <span>{item.label}</span>
+                  </span>
+                  <input
+                    type="checkbox"
+                    disabled={prefsSaving}
+                    checked={Boolean(notificationPrefs?.[item.key])}
+                    onChange={() => handleToggleNotifPref(item.key)}
+                    className="h-4 w-4 accent-[#118AB2]"
+                  />
+                </label>
+              ))}
+            </div>
+          </section>
+        </div>
+
+        {/* 2. Profile & PRC Credentials + Change Password */}
+        <div className="space-y-6">
+          <section className="rounded-3xl border border-[#DDDCD4] bg-white p-6 shadow-xs">
+            <h2 className="flex items-center gap-2 text-base font-extrabold">
+              <Award className="h-5 w-5 text-[#118AB2]" />
+              <span>3. Profile &amp; Verified PRC Credentials</span>
+            </h2>
+            <form onSubmit={handleSaveProfileCredentials} className="mt-4 space-y-3.5 text-xs">
+              <div className="grid grid-cols-2 gap-3 rounded-2xl border border-[#DDDCD4] bg-[#F2F2ED]/60 p-3.5">
+                <div>
+                  <span className="block text-[10px] font-bold uppercase opacity-70">
+                    Account Email
+                  </span>
+                  <span className="font-mono font-extrabold">{profile?.email}</span>
+                </div>
+                <div>
+                  <span className="block text-[10px] font-bold uppercase opacity-70">
+                    Locked Branch Assignment
+                  </span>
+                  <span className="inline-flex items-center gap-1 font-extrabold text-[#118AB2]">
+                    <Lock className="h-3 w-3" />
+                    <span>{branchLabel}</span>
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-extrabold">Full Name &amp; Clinical Title</label>
+                <input
+                  type="text"
+                  required
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  className="mt-1 min-h-[44px] w-full rounded-xl border border-[#DDDCD4] px-3.5 py-2 font-semibold"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-extrabold">PRC License Number</label>
+                  <input
+                    type="text"
+                    value={prcNumber}
+                    onChange={(e) => setPrcNumber(e.target.value)}
+                    placeholder="PRC-0148291"
+                    className="mt-1 min-h-[44px] w-full rounded-xl border border-[#DDDCD4] px-3.5 py-2 font-mono font-semibold"
+                  />
+                </div>
+                <div>
+                  <label className="block font-extrabold">PRC Expiration Date</label>
+                  <input
+                    type="date"
+                    value={prcExpiry}
+                    onChange={(e) => setPrcExpiry(e.target.value)}
+                    className="mt-1 min-h-[44px] w-full rounded-xl border border-[#DDDCD4] px-3.5 py-2 font-semibold"
+                  />
+                </div>
+              </div>
+
+              {profileMsg && (
+                <p
+                  className={`font-extrabold ${
+                    profileMsg.type === 'success' ? 'text-emerald-600' : 'text-red-600'
+                  }`}
+                >
+                  {profileMsg.text}
+                </p>
+              )}
+
+              <button
+                type="submit"
+                disabled={profileSaving}
+                className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-[#118AB2] px-4 py-2.5 text-xs font-extrabold text-white hover:bg-[#0D6E8E] disabled:opacity-60"
+              >
+                <Save className="h-4 w-4" />
+                <span>
+                  {profileSaving ? 'Saving to Supabase...' : 'Save Profile & PRC Credentials'}
+                </span>
+              </button>
+            </form>
+          </section>
+
+          <section className="rounded-3xl border border-[#DDDCD4] bg-white p-6 shadow-xs">
+            <h2 className="flex items-center gap-2 text-base font-extrabold">
+              <KeyRound className="h-5 w-5 text-[#118AB2]" />
+              <span>4. Update Supabase Auth Password</span>
+            </h2>
+            <form onSubmit={handlePasswordChange} className="mt-4 space-y-3 text-xs">
+              <input
+                type="password"
+                placeholder="New password (min. 8 characters)"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="min-h-[44px] w-full rounded-xl border border-[#DDDCD4] px-3.5 py-2 font-semibold"
+              />
+              <input
+                type="password"
+                placeholder="Confirm new password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="min-h-[44px] w-full rounded-xl border border-[#DDDCD4] px-3.5 py-2 font-semibold"
+              />
+              {passwordStatus.text && (
+                <p
+                  className={`font-extrabold ${
+                    passwordStatus.type === 'success'
+                      ? 'text-emerald-600'
+                      : 'text-red-600'
+                  }`}
+                >
+                  {passwordStatus.text}
+                </p>
+              )}
+              <button
+                type="submit"
+                disabled={passwordSaving}
+                className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-[#464B71] px-4 py-2.5 text-xs font-extrabold text-white transition hover:bg-[#343857] disabled:opacity-60"
+              >
+                {passwordSaving ? 'Updating Password...' : 'Change Password'}
+              </button>
+            </form>
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function DashboardLayout() {
   const {
     profile,
@@ -173,15 +502,6 @@ export function DashboardLayout() {
   });
   const notifRef = useRef(null);
 
-  // Settings modal / drawer state
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [passwordStatus, setPasswordStatus] = useState({ type: '', text: '' });
-  const [passwordSaving, setPasswordSaving] = useState(false);
-  const [prefsSaving, setPrefsSaving] = useState(false);
-  const [prefsSavedNotice, setPrefsSavedNotice] = useState(false);
-
   const assignedBranch = profile?.branch_id
     ? getBranchBySlug(profile.branch_id)
     : null;
@@ -201,7 +521,13 @@ export function DashboardLayout() {
 
   const modules = ROLE_MODULES[role] || [];
   const defaultTab = modules[0]?.tab || 'matrix';
-  const activeTab = searchParams.get('tab') || defaultTab;
+  const rawTab = searchParams.get('tab');
+  const activeTab =
+    location.pathname.endsWith('/settings')
+      ? 'settings'
+      : modules.some((m) => m.tab === rawTab)
+        ? rawTab
+        : defaultTab;
 
   const fetchNotifications = useCallback(async () => {
     setNotifLoading(true);
@@ -221,12 +547,6 @@ export function DashboardLayout() {
     const interval = setInterval(fetchNotifications, 45000);
     return () => clearInterval(interval);
   }, [fetchNotifications]);
-
-  useEffect(() => {
-    if (searchParams.get('settings') === '1' || location.pathname.endsWith('/settings')) {
-      setSettingsOpen(true);
-    }
-  }, [searchParams, location.pathname]);
 
   useEffect(() => {
     function handleOutside(e) {
@@ -255,7 +575,7 @@ export function DashboardLayout() {
     setModuleTransitionMsg(`Loading ${label}...`);
     setTimeout(() => {
       setModuleTransitionMsg(null);
-    }, 480);
+    }, 360);
 
     const homePath = getRoleHome(role);
     navigate(`${homePath}?tab=${tabKey}`);
@@ -268,73 +588,14 @@ export function DashboardLayout() {
       window.localStorage.setItem('victorio_abc_read_notifs', JSON.stringify(nextRead));
     }
     setNotifOpen(false);
-    if (notif.target_tab) {
-      const homePath = getRoleHome(role);
-      navigate(`${homePath}?tab=${notif.target_tab}`);
-    }
+    const targetTab = notif.target_tab || defaultTab;
+    const homePath = getRoleHome(role);
+    navigate(`${homePath}?tab=${targetTab}`);
   };
 
   const handleLogout = async () => {
     await signOut();
     navigate('/', { replace: true });
-  };
-
-  const handlePasswordChange = async (e) => {
-    e.preventDefault();
-    setPasswordStatus({ type: '', text: '' });
-
-    if (!newPassword || newPassword.length < 8) {
-      setPasswordStatus({
-        type: 'error',
-        text: 'New password must be at least 8 characters long.',
-      });
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      setPasswordStatus({
-        type: 'error',
-        text: 'New password and confirmation do not match.',
-      });
-      return;
-    }
-
-    setPasswordSaving(true);
-    try {
-      const { error } = await supabase.auth.updateUser({ password: newPassword });
-      if (error) {
-        setPasswordStatus({ type: 'error', text: error.message });
-      } else {
-        setPasswordStatus({
-          type: 'success',
-          text: 'Password updated in Supabase Auth.',
-        });
-        setNewPassword('');
-        setConfirmPassword('');
-      }
-    } catch (err) {
-      setPasswordStatus({
-        type: 'error',
-        text: err?.message || 'Failed to update password.',
-      });
-    } finally {
-      setPasswordSaving(false);
-    }
-  };
-
-  const handleToggleNotifPref = async (key) => {
-    setPrefsSaving(true);
-    setPrefsSavedNotice(false);
-    try {
-      const nextPrefs = {
-        ...notificationPrefs,
-        [key]: !notificationPrefs[key],
-      };
-      await updatePreferences({ notification_prefs: nextPrefs });
-      setPrefsSavedNotice(true);
-      setTimeout(() => setPrefsSavedNotice(false), 2200);
-    } finally {
-      setPrefsSaving(false);
-    }
   };
 
   return (
@@ -354,7 +615,7 @@ export function DashboardLayout() {
         />
       )}
 
-      {/* Dedicated Clinical Sidebar (Zero Branch Switcher, Zero Public Website Link) */}
+      {/* Decluttered Clinical Sidebar (4–5 Focused Views, Zero Branch Switcher) */}
       <aside
         aria-label="Clinical Workspace Sidebar"
         className={`fixed inset-y-0 left-0 z-40 flex flex-col border-r transition-all duration-200 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${
@@ -365,8 +626,7 @@ export function DashboardLayout() {
             : 'border-[#343857] bg-[#464B71] text-white'
         } ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
       >
-        {/* Brand Header + Locked Branch Badge */}
-        <div className="flex shrink-0 flex-col border-b border-white/10 px-4 py-3.5">
+        <div className="flex shrink-0 flex-col border-b border-white/10 px-4 py-4">
           <div className="flex items-center justify-between gap-2">
             <Link
               to={getRoleHome(role)}
@@ -375,7 +635,7 @@ export function DashboardLayout() {
               <img
                 src="/victorio_logo.jpg"
                 alt="Victorio ABC Logo"
-                className="h-10 w-10 shrink-0 rounded-full border-2 border-[#7CD5C7] bg-white object-cover shadow-md"
+                className="h-11 w-11 shrink-0 rounded-full border-2 border-[#7CD5C7] bg-white object-cover shadow-md"
               />
               {!sidebarCollapsed && (
                 <div className="min-w-0">
@@ -416,7 +676,6 @@ export function DashboardLayout() {
             </button>
           </div>
 
-          {/* Strictly Locked, Read-Only Branch & Role Indicator */}
           {!sidebarCollapsed && (
             <div
               data-testid="locked-branch-badge"
@@ -428,11 +687,11 @@ export function DashboardLayout() {
           )}
         </div>
 
-        {/* Role Module Navigation */}
+        {/* 4–5 Crisp, Focused Sidebar Views */}
         <nav className="flex-1 space-y-1.5 overflow-y-auto px-3 py-4">
           {!sidebarCollapsed && (
             <p className="px-2 pb-1 text-[10px] font-extrabold uppercase tracking-wider text-white/55">
-              Clinical Modules
+              Workspace Views
             </p>
           )}
           {modules.map(({ tab, label, subtitle, icon: Icon }) => {
@@ -443,9 +702,9 @@ export function DashboardLayout() {
                 type="button"
                 onClick={() => handleSelectModule(tab, label)}
                 title={sidebarCollapsed ? label : undefined}
-                className={`flex min-h-[48px] w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition ${
+                className={`flex min-h-[50px] w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-left transition ${
                   isActive
-                    ? 'bg-[#118AB2] text-white shadow-md ring-1 ring-[#7CD5C7]/40'
+                    ? 'bg-[#118AB2] text-white shadow-md ring-1 ring-[#7CD5C7]/50'
                     : 'text-white/85 hover:bg-white/10 hover:text-white'
                 }`}
               >
@@ -463,10 +722,10 @@ export function DashboardLayout() {
           })}
         </nav>
 
-        {/* Bottom Workspace Settings & PRC Credential Summary */}
-        <div className="space-y-2 border-t border-white/10 p-3">
-          {!sidebarCollapsed && profile?.prc_license_number && (
-            <div className="rounded-xl bg-white/5 px-3 py-2 text-[11px]">
+        {/* Verified PRC Credential Footer */}
+        <div className="border-t border-white/10 p-3">
+          {!sidebarCollapsed && (
+            <div className="rounded-xl bg-white/5 px-3 py-2.5 text-[11px]">
               <div className="flex items-center justify-between text-white/75">
                 <span className="font-bold">PRC Credential</span>
                 <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-extrabold text-emerald-300">
@@ -474,22 +733,10 @@ export function DashboardLayout() {
                 </span>
               </div>
               <p className="mt-0.5 font-mono text-xs font-extrabold text-[#7CD5C7]">
-                {profile.prc_license_number}
+                {profile?.prc_license_number || 'PRC-VERIFIED'}
               </p>
             </div>
           )}
-
-          <button
-            type="button"
-            onClick={() => {
-              setSidebarOpen(false);
-              setSettingsOpen(true);
-            }}
-            className="flex min-h-[44px] w-full items-center gap-2.5 rounded-xl bg-white/10 px-3 py-2 text-xs font-extrabold text-white transition hover:bg-white/15"
-          >
-            <Settings className="h-4 w-4 shrink-0 text-[#7CD5C7]" />
-            {!sidebarCollapsed && <span>Workspace Settings &amp; Theme</span>}
-          </button>
         </div>
       </aside>
 
@@ -503,7 +750,6 @@ export function DashboardLayout() {
               : 'border-[#DDDCD4] bg-white/95 text-[#464B71] backdrop-blur-md'
           }`}
         >
-          {/* Left: Mobile Menu + Locked Role & Branch Badge */}
           <div className="flex min-w-0 items-center gap-3">
             <button
               type="button"
@@ -531,9 +777,8 @@ export function DashboardLayout() {
             </div>
           </div>
 
-          {/* Right Utility Controls: Live Notification Bell, Theme Toggle, Settings, Staff Info, Log Out */}
           <div className="flex items-center gap-2 sm:gap-2.5">
-            {/* Real-Time Notification Center */}
+            {/* Real-Time Notification Bell */}
             <div className="relative" ref={notifRef}>
               <button
                 type="button"
@@ -593,7 +838,7 @@ export function DashboardLayout() {
                           onClick={markAllRead}
                           className="rounded-lg bg-[#118AB2]/15 px-2.5 py-1 text-[11px] font-extrabold text-[#118AB2] hover:bg-[#118AB2]/25"
                         >
-                          Mark All as Read
+                          Mark All Read
                         </button>
                       )}
                     </div>
@@ -671,23 +916,24 @@ export function DashboardLayout() {
               {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
 
-            {/* Settings Drawer Trigger */}
+            {/* Quick Jump to Settings View */}
             <button
               type="button"
               data-testid="dashboard-settings-trigger"
-              onClick={() => setSettingsOpen(true)}
+              onClick={() => handleSelectModule('settings', 'Settings')}
               aria-label="Open Workspace Settings"
               title="Workspace Settings & Credentials"
               className={`inline-flex h-11 w-11 items-center justify-center rounded-xl border transition ${
-                isDark
-                  ? 'border-slate-700 bg-slate-800 text-slate-200 hover:border-[#7CD5C7]'
-                  : 'border-[#DDDCD4] bg-[#F2F2ED] text-[#464B71] hover:border-[#118AB2]'
+                activeTab === 'settings'
+                  ? 'border-[#118AB2] bg-[#118AB2] text-white'
+                  : isDark
+                    ? 'border-slate-700 bg-slate-800 text-slate-200 hover:border-[#7CD5C7]'
+                    : 'border-[#DDDCD4] bg-[#F2F2ED] text-[#464B71] hover:border-[#118AB2]'
               }`}
             >
               <Settings className="h-4 w-4" />
             </button>
 
-            {/* Authenticated Staff Identity */}
             <div className="hidden text-right md:block">
               <p className="max-w-[13rem] truncate text-xs font-extrabold">
                 {profile?.full_name || 'Clinical Staff'}
@@ -697,7 +943,6 @@ export function DashboardLayout() {
               </p>
             </div>
 
-            {/* Clean Logout Button */}
             <button
               type="button"
               data-testid="dashboard-logout-btn"
@@ -714,249 +959,28 @@ export function DashboardLayout() {
           </div>
         </header>
 
-        {/* Main Workspace Content */}
-        <main className="relative min-w-0 flex-1 p-3 sm:p-5 lg:p-6">
+        {/* Focused Single-View Workspace Area */}
+        <main className="relative min-w-0 flex-1 p-4 sm:p-6 lg:p-8">
           {moduleTransitionMsg ? (
             <BufferLoader
               message={moduleTransitionMsg}
               fullScreen={false}
               isDark={isDark}
             />
+          ) : activeTab === 'settings' ? (
+            <WorkspaceSettingsView
+              profile={profile}
+              role={role}
+              branchLabel={branchLabel}
+              isDark={isDark}
+              updatePreferences={updatePreferences}
+              notificationPrefs={notificationPrefs}
+            />
           ) : (
             <Outlet context={{ isDark, activeTab, setSearchParams }} />
           )}
         </main>
       </div>
-
-      {/* Workspace Settings Drawer / Modal (`/settings` view inside dashboard) */}
-      {settingsOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Workspace Settings & Credentials"
-          className="fixed inset-0 z-50 flex items-center justify-end bg-slate-950/65 backdrop-blur-xs"
-        >
-          <div
-            className={`flex h-full w-full max-w-lg flex-col overflow-y-auto border-l p-6 shadow-2xl ${
-              isDark
-                ? 'border-slate-700 bg-[#1E293B] text-slate-100'
-                : 'border-[#DDDCD4] bg-white text-[#464B71]'
-            }`}
-          >
-            <div className="flex items-center justify-between border-b border-current/10 pb-4">
-              <div>
-                <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#118AB2]">
-                  Clinical Workspace Preferences
-                </span>
-                <h2 className="text-xl font-extrabold">Settings &amp; Credentials</h2>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSettingsOpen(false)}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-current/15 hover:bg-current/10"
-                aria-label="Close settings"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="mt-5 space-y-6">
-              {/* 1. Persistent Light / Dark Theme Selector */}
-              <section className="space-y-2.5">
-                <h3 className="text-xs font-extrabold uppercase tracking-wider opacity-75">
-                  1. Workspace Appearance (Saved to Supabase Profile)
-                </h3>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => updatePreferences({ theme_preference: 'light' })}
-                    className={`flex min-h-[52px] items-center justify-center gap-2 rounded-xl border-2 px-4 py-3 text-xs font-extrabold transition ${
-                      !isDark
-                        ? 'border-[#118AB2] bg-[#118AB2]/10 text-[#464B71]'
-                        : 'border-slate-700 bg-slate-800/60 text-slate-300'
-                    }`}
-                  >
-                    <Sun className="h-4 w-4 text-amber-500" />
-                    <span>Clinical Light Mode</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => updatePreferences({ theme_preference: 'dark' })}
-                    className={`flex min-h-[52px] items-center justify-center gap-2 rounded-xl border-2 px-4 py-3 text-xs font-extrabold transition ${
-                      isDark
-                        ? 'border-[#7CD5C7] bg-[#0F172A] text-[#7CD5C7]'
-                        : 'border-[#DDDCD4] bg-[#F2F2ED] text-[#464B71]'
-                    }`}
-                  >
-                    <Moon className="h-4 w-4 text-[#7CD5C7]" />
-                    <span>Slate-Navy Dark Mode</span>
-                  </button>
-                </div>
-                <p className="text-[11px] opacity-75">
-                  Applies exclusively to your authenticated dashboard workspace while keeping the public landing page in its default light theme.
-                </p>
-              </section>
-
-              {/* 2. Profile & Verified PRC Credentials */}
-              <section className="space-y-2.5">
-                <h3 className="text-xs font-extrabold uppercase tracking-wider opacity-75">
-                  2. Profile &amp; PRC License Credentials
-                </h3>
-                <div
-                  className={`space-y-2.5 rounded-2xl border p-4 text-xs ${
-                    isDark
-                      ? 'border-slate-700 bg-[#0F172A]/70'
-                      : 'border-[#DDDCD4] bg-[#F2F2ED]/70'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="opacity-75">Authenticated Name</span>
-                    <span className="font-extrabold">{profile?.full_name}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="opacity-75">Official Email</span>
-                    <span className="font-mono font-bold">{profile?.email}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="opacity-75">Clinical Role</span>
-                    <span className="rounded-full bg-[#118AB2] px-2.5 py-0.5 text-[10px] font-extrabold uppercase text-white">
-                      {role}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="opacity-75">Assigned Branch Lock</span>
-                    <span className="inline-flex items-center gap-1 font-extrabold text-[#118AB2]">
-                      <Lock className="h-3 w-3" />
-                      <span>{branchLabel}</span>
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between border-t border-current/10 pt-2">
-                    <span className="flex items-center gap-1 opacity-75">
-                      <Award className="h-3.5 w-3.5 text-[#118AB2]" />
-                      <span>PRC License Number</span>
-                    </span>
-                    <span className="font-mono font-extrabold text-[#118AB2]">
-                      {profile?.prc_license_number || 'PRC-VERIFIED'}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="opacity-75">PRC Expiration Date</span>
-                    <span className="font-bold">
-                      {profile?.prc_expiry_date || '2028-06-30'}
-                    </span>
-                  </div>
-                </div>
-              </section>
-
-              {/* 3. Notification Preferences */}
-              <section className="space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-extrabold uppercase tracking-wider opacity-75">
-                    3. Live Alert &amp; Notification Preferences
-                  </h3>
-                  {prefsSavedNotice && (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-extrabold text-emerald-500">
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                      <span>Saved</span>
-                    </span>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  {[
-                    {
-                      key: 'critical_clinical',
-                      label: 'High-Risk Cat III AI Uploads & Overdue Boosters',
-                    },
-                    {
-                      key: 'cold_chain',
-                      label: 'Cold-Chain Temperature Breach Escalations (2.0°C–8.0°C)',
-                    },
-                    {
-                      key: 'inventory_alerts',
-                      label: '6-Hr Open-Vial Expiry & 14-Day Stockout Warnings',
-                    },
-                    {
-                      key: 'sound_alerts',
-                      label: 'Audible Clinical Chime on Critical Alerts',
-                    },
-                  ].map((item) => (
-                    <label
-                      key={item.key}
-                      className={`flex cursor-pointer items-center justify-between rounded-xl border px-3.5 py-2.5 text-xs font-bold ${
-                        isDark
-                          ? 'border-slate-700 bg-slate-800/60'
-                          : 'border-[#DDDCD4] bg-[#F2F2ED]/60'
-                      }`}
-                    >
-                      <span className="flex items-center gap-2 pr-2">
-                        <Volume2 className="h-3.5 w-3.5 shrink-0 text-[#118AB2]" />
-                        <span>{item.label}</span>
-                      </span>
-                      <input
-                        type="checkbox"
-                        disabled={prefsSaving}
-                        checked={Boolean(notificationPrefs?.[item.key])}
-                        onChange={() => handleToggleNotifPref(item.key)}
-                        className="h-4 w-4 accent-[#118AB2]"
-                      />
-                    </label>
-                  ))}
-                </div>
-              </section>
-
-              {/* 4. Working Change Password Form */}
-              <section className="space-y-2.5">
-                <h3 className="flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider opacity-75">
-                  <KeyRound className="h-3.5 w-3.5 text-[#118AB2]" />
-                  <span>4. Change Account Password</span>
-                </h3>
-                <form onSubmit={handlePasswordChange} className="space-y-3">
-                  <input
-                    type="password"
-                    placeholder="New password (min. 8 characters)"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    className={`min-h-[44px] w-full rounded-xl border px-3.5 py-2 text-xs font-semibold ${
-                      isDark
-                        ? 'border-slate-700 bg-slate-900 text-slate-100'
-                        : 'border-[#DDDCD4] bg-white text-[#464B71]'
-                    }`}
-                  />
-                  <input
-                    type="password"
-                    placeholder="Confirm new password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    className={`min-h-[44px] w-full rounded-xl border px-3.5 py-2 text-xs font-semibold ${
-                      isDark
-                        ? 'border-slate-700 bg-slate-900 text-slate-100'
-                        : 'border-[#DDDCD4] bg-white text-[#464B71]'
-                    }`}
-                  />
-                  {passwordStatus.text && (
-                    <p
-                      className={`text-xs font-extrabold ${
-                        passwordStatus.type === 'success'
-                          ? 'text-emerald-500'
-                          : 'text-red-500'
-                      }`}
-                    >
-                      {passwordStatus.text}
-                    </p>
-                  )}
-                  <button
-                    type="submit"
-                    disabled={passwordSaving}
-                    className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-[#118AB2] px-4 py-2.5 text-xs font-extrabold text-white transition hover:bg-[#0D6E8E] disabled:opacity-60"
-                  >
-                    {passwordSaving ? 'Updating Password...' : 'Update Password'}
-                  </button>
-                </form>
-              </section>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -1,6 +1,23 @@
-const DEFAULT_API_BASE_URL =
-  import.meta.env.VITE_API_URL ||
-  (import.meta.env.PROD ? '/api/v1' : 'http://localhost:5000/api/v1');
+export function resolveRuntimeApiBaseUrl() {
+  const envUrl = import.meta.env.VITE_API_URL || '';
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    const isLocalHost = host === 'localhost' || host === '127.0.0.1';
+    if (!isLocalHost) {
+      // On Vercel production (https://victorio-abc-ph.vercel.app), never use localhost URLs
+      if (!envUrl || envUrl.includes('localhost') || envUrl.includes('127.0.0.1')) {
+        return '/api/v1';
+      }
+      return envUrl;
+    }
+  }
+  if (import.meta.env.PROD && (envUrl.includes('localhost') || envUrl.includes('127.0.0.1'))) {
+    return '/api/v1';
+  }
+  return envUrl || '/api/v1';
+}
+
+const DEFAULT_API_BASE_URL = resolveRuntimeApiBaseUrl();
 
 /**
  * Formats an 11-digit Philippine mobile number (e.g. "09454378284") into

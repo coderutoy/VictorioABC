@@ -42,7 +42,7 @@ apiRouter.use('/analytics', analyticsRoutes);
 apiRouter.use('/branches', branchesRoutes);
 apiRouter.use('/audit', auditRoutes);
 
-app.use(['/api/v1', '/v1'], apiRouter);
+app.use(['/api/v1', '/v1', '/api', '/'], apiRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

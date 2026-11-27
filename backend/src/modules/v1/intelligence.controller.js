@@ -1775,7 +1775,8 @@ export const getLiveNotifications = asyncHandler(async (req, res) => {
         message: `${branchNameMap.get(bId) || bId} refrigerator logged ${
           log.temperature_c
         }°C during ${log.shift_label} (outside 2.0°C–8.0°C threshold).`,
-        target_tab: role === 'admin' ? 'matrix' : 'cold_chain',
+        target_tab:
+          role === 'admin' ? 'matrix' : role === 'nurse' ? 'defaulters' : 'cat3',
         created_at: log.recorded_at,
       });
     }
@@ -1796,7 +1797,8 @@ export const getLiveNotifications = asyncHandler(async (req, res) => {
         branch_name: branchNameMap.get(v.branch_id) || v.branch_id,
         title: `Open PVRV Vial Expiring in ${remMinutes} mins`,
         message: `Lot ${v.lot_number} (${v.vaccine_name}) has ${remDoses} remaining ID dose(s) before 6-hour discard window.`,
-        target_tab: role === 'nurse' ? 'vials' : 'yield',
+        target_tab:
+          role === 'nurse' ? 'fefo' : role === 'admin' ? 'inventory' : 'dosing',
         created_at: v.opened_at,
       });
     }
@@ -1814,7 +1816,8 @@ export const getLiveNotifications = asyncHandler(async (req, res) => {
         branch_name: branchNameMap.get(sub.branch_id) || sub.branch_id,
         title: `Mobile AI Pre-Triage: Category ${sub.ai_predicted_category} (${sub.confidence_score}%)`,
         message: `Case ${c?.case_number || 'Walk-In'} (${c?.wound_site || 'Wound Intake'}) awaiting physician verification.`,
-        target_tab: role === 'doctor' ? 'ai_queue' : 'triage',
+        target_tab:
+          role === 'doctor' ? 'ai_queue' : role === 'nurse' ? 'triage' : 'matrix',
         created_at: sub.created_at,
       });
     }
@@ -1833,7 +1836,8 @@ export const getLiveNotifications = asyncHandler(async (req, res) => {
           branch_name: branchNameMap.get(d.branch_id) || d.branch_id,
           title: `Overdue Cat III Booster (Day ${d.dose_day})`,
           message: `Case ${c?.case_number || 'CASE'} (${c?.wound_site || 'High-Risk Exposure'}) missed scheduled Day ${d.dose_day} dose (${d.scheduled_date}).`,
-          target_tab: role === 'nurse' ? 'defaulters' : role === 'admin' ? 'kpi' : 'cat3',
+          target_tab:
+            role === 'nurse' ? 'defaulters' : role === 'admin' ? 'matrix' : 'cat3',
           created_at: `${d.scheduled_date}T08:00:00.000Z`,
         });
       }
@@ -1851,7 +1855,8 @@ export const getLiveNotifications = asyncHandler(async (req, res) => {
         branch_name: branchNameMap.get(item.branch_id) || item.branch_id,
         title: `Low FEFO Batch Stock: ${item.item_name}`,
         message: `${branchNameMap.get(item.branch_id) || item.branch_id} batch ${item.batch_number} has ${item.stock_vials} vials remaining (reorder level: ${item.reorder_level}).`,
-        target_tab: role === 'admin' ? 'predictive' : 'fefo',
+        target_tab:
+          role === 'admin' ? 'inventory' : role === 'nurse' ? 'fefo' : 'dosing',
         created_at: item.updated_at || new Date().toISOString(),
       });
     }
