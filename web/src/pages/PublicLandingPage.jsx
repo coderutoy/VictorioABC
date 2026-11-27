@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useBranch } from '../context/BranchContext';
+import { useAccessibility } from '../context/AccessibilityContext';
 
 const BRANCH_COORDS = {
   baliwag: { lat: 14.9547, lng: 120.8969 },
@@ -103,6 +104,7 @@ const CLINIC_HIGHLIGHTS = [
 export function PublicLandingPage() {
   const { isAuthenticated } = useAuth();
   const { publicBranches, selectedPublicBranch, setSelectedBranchSlug } = useBranch();
+  const { highContrast } = useAccessibility();
   const [nearestDistanceKm, setNearestDistanceKm] = useState(null);
   const [locating, setLocating] = useState(false);
 
@@ -144,10 +146,23 @@ export function PublicLandingPage() {
 
   return (
     <div className="space-y-10 pb-14">
-      {/* 1. Dynamic Hero Banner with Active Nearest-Branch Spotlight Card */}
-      <section className="bg-[#464B71]/95 py-10 text-white shadow-md sm:py-14">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="grid items-center gap-8 lg:grid-cols-12">
+      {/* 1. Dynamic Hero Banner with Flush Bottom-Right Two Dogs & Two Cats Decorative SVG */}
+      <section className="relative overflow-hidden bg-[#464B71] py-10 text-white shadow-md sm:py-14 lg:py-16">
+        {/* Decorative Bottom-Right Two Dogs & Two Cats Vector Cutout SVG */}
+        <img
+          src="/images/hero-pets.svg"
+          alt=""
+          aria-hidden="true"
+          loading="eager"
+          decoding="async"
+          className={`pointer-events-none select-none absolute bottom-0 right-0 z-0 h-auto w-[200px] sm:w-[270px] lg:w-[440px] xl:w-[540px] max-w-[44vw] bg-transparent object-contain object-right-bottom transition-opacity duration-300 ${
+            highContrast ? 'opacity-10' : 'opacity-20 sm:opacity-35 lg:opacity-90'
+          }`}
+        />
+
+        {/* Foreground Content Above Decorative SVG */}
+        <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="grid items-start gap-8 lg:grid-cols-12">
             <div className="space-y-5 lg:col-span-7">
               <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3.5 py-1 text-xs font-extrabold text-[#7CD5C7] ring-1 ring-[#7CD5C7]/40">
                 <ShieldCheck className="h-4 w-4" />
@@ -166,14 +181,14 @@ export function PublicLandingPage() {
               <div className="flex flex-wrap items-center gap-3 pt-1">
                 <Link
                   to={portalPath}
-                  className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-[#118AB2] px-6 py-3 text-sm font-extrabold text-white shadow-md transition hover:bg-[#0D6E8E]"
+                  className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-[#118AB2] px-6 py-3 text-sm font-extrabold text-white shadow-md transition hover:bg-[#0D6E8E] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#7CD5C7]"
                 >
                   <span>{isAuthenticated ? 'Open Clinical Portal' : 'Portal Sign In'}</span>
                   <ArrowRight className="h-4 w-4" />
                 </Link>
                 <Link
                   to="/services"
-                  className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-[#7CD5C7] px-6 py-3 text-sm font-extrabold text-[#464B71] shadow-md transition hover:bg-[#68c7b8]"
+                  className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-[#7CD5C7] px-6 py-3 text-sm font-extrabold text-[#464B71] shadow-md transition hover:bg-[#68c7b8] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white"
                 >
                   <Syringe className="h-4 w-4" />
                   <span>View Our Services</span>
@@ -182,8 +197,8 @@ export function PublicLandingPage() {
             </div>
 
             {/* Active Nearest-Branch Spotlight Card */}
-            <div className="lg:col-span-5">
-              <div className="rounded-2xl border-2 border-[#7CD5C7] bg-white p-5 text-[#464B71] shadow-xl">
+            <div className="lg:col-span-5 lg:mb-24 xl:mb-28">
+              <div className="rounded-2xl border-2 border-[#7CD5C7] bg-white/95 backdrop-blur-sm p-5 text-[#464B71] shadow-xl">
                 <div className="flex items-center justify-between gap-2 border-b border-[#F2F2ED] pb-3">
                   <div className="flex items-center gap-2.5">
                     <img
@@ -211,7 +226,7 @@ export function PublicLandingPage() {
                     type="button"
                     onClick={handleFindNearestBranch}
                     disabled={locating}
-                    className="inline-flex min-h-[38px] items-center gap-1 rounded-xl border border-[#DDDCD4] bg-[#F2F2ED] px-2.5 py-1 text-[11px] font-extrabold text-[#464B71] hover:bg-[#DDDCD4]"
+                    className="inline-flex min-h-[44px] items-center gap-1 rounded-xl border border-[#DDDCD4] bg-[#F2F2ED] px-3 py-1.5 text-xs font-extrabold text-[#464B71] hover:bg-[#DDDCD4]"
                   >
                     <Navigation className="h-3.5 w-3.5 text-[#118AB2]" />
                     <span>{locating ? 'Locating...' : 'Nearest'}</span>
@@ -258,7 +273,7 @@ export function PublicLandingPage() {
       </section>
 
       {/* 2. Compact High-Contrast Navigation Cards to Dedicated Guide, Roadmap & Protocol Pages */}
-      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <section id="clinical-guides" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="rounded-3xl border border-[#DDDCD4] bg-white/90 backdrop-blur-[2px] p-6 shadow-sm sm:p-8">
           <div className="flex flex-wrap items-end justify-between gap-2">
             <div>
@@ -283,7 +298,7 @@ export function PublicLandingPage() {
                 <Link
                   key={to}
                   to={to}
-                  className={`group flex flex-col justify-between rounded-2xl border-2 p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${accent}`}
+                  className={`group flex flex-col justify-between rounded-2xl border-2 p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#118AB2] ${accent}`}
                 >
                   <div>
                     <div className="flex items-center justify-between gap-2">
@@ -304,7 +319,7 @@ export function PublicLandingPage() {
                     </p>
                   </div>
 
-                  <div className="mt-5 flex min-h-[44px] items-center justify-between rounded-xl bg-[#F2F2ED] px-4 py-2 text-xs font-extrabold text-[#464B71] group-hover:bg-[#118AB2] group-hover:text-white">
+                  <div className="mt-5 flex min-h-[48px] items-center justify-between rounded-xl bg-[#F2F2ED] px-4 py-2 text-xs font-extrabold text-[#464B71] group-hover:bg-[#118AB2] group-hover:text-white">
                     <span>{cta}</span>
                     <ArrowRight className="h-4 w-4" />
                   </div>
@@ -322,7 +337,7 @@ export function PublicLandingPage() {
             <Link
               key={title}
               to={to}
-              className="group flex flex-col justify-between rounded-2xl border border-[#DDDCD4] bg-white/95 backdrop-blur-[2px] p-5 shadow-sm transition hover:border-[#118AB2] hover:shadow-md"
+              className="group flex flex-col justify-between rounded-2xl border border-[#DDDCD4] bg-white/95 backdrop-blur-[2px] p-5 shadow-sm transition hover:border-[#118AB2] hover:shadow-md focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#118AB2]"
             >
               <div className="flex items-start gap-3.5">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#7CD5C7]/35 text-[#464B71]">
@@ -350,39 +365,39 @@ export function PublicLandingPage() {
           <div className="flex flex-wrap items-center gap-2">
             <Link
               to="/triage-guide"
-              className="min-h-[42px] inline-flex items-center rounded-xl bg-[#F2F2ED] px-3.5 py-2 text-xs font-extrabold text-[#464B71] hover:bg-[#DDDCD4]"
+              className="inline-flex min-h-[48px] items-center rounded-xl bg-[#F2F2ED] px-3.5 py-2 text-xs font-extrabold text-[#464B71] hover:bg-[#DDDCD4]"
             >
               Triage Guide
             </Link>
             <Link
               to="/roadmap"
-              className="min-h-[42px] inline-flex items-center rounded-xl bg-[#F2F2ED] px-3.5 py-2 text-xs font-extrabold text-[#464B71] hover:bg-[#DDDCD4]"
+              className="inline-flex min-h-[48px] items-center rounded-xl bg-[#F2F2ED] px-3.5 py-2 text-xs font-extrabold text-[#464B71] hover:bg-[#DDDCD4]"
             >
               Vaccination Roadmap
             </Link>
             <Link
               to="/protocols"
-              className="min-h-[42px] inline-flex items-center rounded-xl bg-[#F2F2ED] px-3.5 py-2 text-xs font-extrabold text-[#464B71] hover:bg-[#DDDCD4]"
+              className="inline-flex min-h-[48px] items-center rounded-xl bg-[#F2F2ED] px-3.5 py-2 text-xs font-extrabold text-[#464B71] hover:bg-[#DDDCD4]"
             >
               Clinical Protocols
             </Link>
             <Link
               to="/faq"
-              className="min-h-[42px] inline-flex items-center gap-1 rounded-xl bg-[#F2F2ED] px-3.5 py-2 text-xs font-extrabold text-[#464B71] hover:bg-[#DDDCD4]"
+              className="inline-flex min-h-[48px] items-center gap-1 rounded-xl bg-[#F2F2ED] px-3.5 py-2 text-xs font-extrabold text-[#464B71] hover:bg-[#DDDCD4]"
             >
               <HelpCircle className="h-3.5 w-3.5 text-[#118AB2]" />
               <span>FAQ</span>
             </Link>
             <Link
               to="/careers"
-              className="min-h-[42px] inline-flex items-center gap-1 rounded-xl bg-[#F2F2ED] px-3.5 py-2 text-xs font-extrabold text-[#464B71] hover:bg-[#DDDCD4]"
+              className="inline-flex min-h-[48px] items-center gap-1 rounded-xl bg-[#F2F2ED] px-3.5 py-2 text-xs font-extrabold text-[#464B71] hover:bg-[#DDDCD4]"
             >
               <Briefcase className="h-3.5 w-3.5 text-[#118AB2]" />
               <span>Careers</span>
             </Link>
             <Link
               to="/contact"
-              className="min-h-[42px] inline-flex items-center rounded-xl bg-[#118AB2] px-4 py-2 text-xs font-extrabold text-white hover:bg-[#0D6E8E]"
+              className="inline-flex min-h-[48px] items-center rounded-xl bg-[#118AB2] px-4 py-2 text-xs font-extrabold text-white hover:bg-[#0D6E8E]"
             >
               All 7 Branches &amp; Contact
             </Link>
