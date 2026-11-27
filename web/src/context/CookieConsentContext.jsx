@@ -122,9 +122,22 @@ function readInitialConsentRecord() {
 
 const CookieConsentContext = createContext(null);
 
+const SESSION_DISMISS_KEY = 'vabc_cookie_notice_dismissed';
+
+function wasNoticeDismissedThisSession() {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.sessionStorage.getItem(SESSION_DISMISS_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 export function CookieConsentProvider({ children }) {
   const [consentRecord, setConsentRecord] = useState(readInitialConsentRecord);
-  const [isBannerOpen, setIsBannerOpen] = useState(() => readInitialConsentRecord() === null);
+  const [isBannerOpen, setIsBannerOpen] = useState(
+    () => readInitialConsentRecord() === null && !wasNoticeDismissedThisSession()
+  );
   const [openedFromPreferences, setOpenedFromPreferences] = useState(false);
 
   const consent = consentRecord ? consentRecord.status : null;
@@ -187,6 +200,24 @@ export function CookieConsentProvider({ children }) {
     setIsBannerOpen(true);
   }, []);
 
+  /**
+   * "×" dismissal: hides the notice for this browser session only and NEVER treats it as
+   * "Accept All". With no stored decision, every non-essential script stays blocked
+   * (equivalent to Essential Only) until the visitor explicitly opts in via Preferences.
+   */
+  const dismissCookieNotice = useCallback(() => {
+    setIsBannerOpen(false);
+    setOpenedFromPreferences(false);
+    try {
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.setItem(SESSION_DISMISS_KEY, '1');
+      }
+    } catch {
+      // Ignore storage write errors
+    }
+    blockOrCleanupNonEssentialScripts();
+  }, []);
+
   const closeCookiePreferences = useCallback(() => {
     setIsBannerOpen(false);
     setOpenedFromPreferences(false);
@@ -203,6 +234,7 @@ export function CookieConsentProvider({ children }) {
       saveConsentPreferences,
       openCookiePreferences,
       closeCookiePreferences,
+      dismissCookieNotice,
     }),
     [
       consent,
@@ -214,6 +246,7 @@ export function CookieConsentProvider({ children }) {
       saveConsentPreferences,
       openCookiePreferences,
       closeCookiePreferences,
+      dismissCookieNotice,
     ]
   );
 

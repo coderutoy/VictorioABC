@@ -53,9 +53,7 @@ export function PublicFooter() {
     []
   );
 
-  const portalPath = isAuthenticated
-    ? '/dashboard'
-    : `/login?branch=${encodeURIComponent(selectedPublicBranch.slug)}`;
+  const portalPath = isAuthenticated ? '/dashboard' : '/login';
 
   return (
     <footer className="bg-[#464B71] text-white border-t border-white/15">
@@ -238,13 +236,13 @@ export function PublicFooter() {
             <p className="text-xs font-extrabold uppercase tracking-wider text-[#7CD5C7]">
               Download App
             </p>
-            <div className="rounded-2xl border-2 border-[#7CD5C7] bg-white p-4 text-center text-[#464B71] shadow-lg">
-              <div className="inline-flex items-center gap-1.5 rounded-full bg-[#7CD5C7]/35 px-2.5 py-0.5 text-[11px] font-extrabold text-[#464B71]">
+            <div className="rounded-xl border border-[#7CD5C7] bg-white p-3 text-center text-[#464B71] shadow-md">
+              <div className="inline-flex items-center gap-1 rounded-full bg-[#7CD5C7]/35 px-2 py-0.5 text-[10px] font-extrabold text-[#464B71]">
                 <Smartphone className="h-3.5 w-3.5 text-[#118AB2]" />
                 <span>Download the Victorio ABC App</span>
               </div>
 
-              <div className="mx-auto mt-3 flex h-36 w-36 items-center justify-center rounded-xl border border-[#DDDCD4] bg-white p-2.5 shadow-inner">
+              <div className="mx-auto mt-2 flex h-24 w-24 items-center justify-center rounded-lg border border-[#DDDCD4] bg-white p-1.5">
                 <svg
                   viewBox={`0 0 ${qrSize} ${qrSize}`}
                   className="h-full w-full"
@@ -269,10 +267,10 @@ export function PublicFooter() {
                 </svg>
               </div>
 
-              <p className="mt-2.5 text-xs font-bold text-[#464B71]">
-                Scan QR code — Mobile App Link Coming Soon
+              <p className="mt-1.5 text-[11px] font-bold text-[#464B71]">
+                Scan — App Link Coming Soon
               </p>
-              <p className="mt-0.5 text-[11px] text-[#464B71]/70">
+              <p className="mt-0.5 text-[10px] text-[#464B71]/70">
                 Digital QR Pass &amp; PEP Schedule Companion
               </p>
             </div>

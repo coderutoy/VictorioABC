@@ -20,6 +20,17 @@ export const OFFICIAL_BRANCH_MAP = Object.freeze({
 
 const VALID_BRANCH_IDS = new Set(Object.values(OFFICIAL_BRANCH_MAP));
 
+const ROLE_HOME_PATHS = Object.freeze({
+  admin: '/dashboard/admin',
+  nurse: '/dashboard/nurse',
+  doctor: '/dashboard/doctor',
+  patient: '/mobile-app-only',
+});
+
+function roleHomePath(role) {
+  return ROLE_HOME_PATHS[String(role || '').toLowerCase()] || '/login';
+}
+
 export function resolveClientBranchId(req) {
   const rawBranchId =
     req.body?.branch_id ||
@@ -181,7 +192,7 @@ export const loginWithBranchLock = asyncHandler(async (req, res) => {
       role: resolvedProfile.role,
       active_branch_id: activeBranchId,
       require_mobile_app: isPatient,
-      redirect_to: isPatient ? '/mobile-app' : '/dashboard',
+      redirect_to: roleHomePath(resolvedProfile.role),
     },
   });
 });
@@ -206,7 +217,7 @@ export const verifyBranchSession = asyncHandler(async (req, res) => {
       role: req.user.role,
       active_branch_id: activeBranchId,
       require_mobile_app: isPatient,
-      redirect_to: isPatient ? '/mobile-app' : '/dashboard',
+      redirect_to: roleHomePath(req.user.role),
     },
   });
 });

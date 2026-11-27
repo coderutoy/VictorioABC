@@ -1,4 +1,4 @@
-﻿@tailwind base;
+@tailwind base;
 @tailwind components;
 @tailwind utilities;
 
@@ -6,6 +6,20 @@
   html,
   body,
   #root {
-    height: 100%;
+    min-height: 100%;
+  }
+
+  /* Safety net against accidental horizontal page scroll on phones/tablets
+     (clip does not create a scroll container, so sticky headers keep working). */
+  html,
+  body {
+    overflow-x: clip;
+    max-width: 100%;
+  }
+
+  img,
+  svg,
+  video {
+    max-width: 100%;
   }
 }

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import {
   ShieldAlert,
   ShieldCheck,
@@ -15,7 +15,8 @@ import {
   Loader2,
   HelpCircle,
 } from 'lucide-react';
-import { useAuth, ROLES } from '../context/AuthContext';
+import { useAuth, ROLES, getRoleHome } from '../context/AuthContext';
+import { supabaseConfigWarning } from '../lib/supabase';
 import { useBranch } from '../context/BranchContext';
 import { formatPhoneDisplay } from '../config/branches';
 import { PagePetBackground } from '../components/PagePetBackground';
@@ -42,8 +43,6 @@ export function LoginPage() {
   const { isAuthenticated, role, isSupabaseConfigured, signIn } = useAuth();
   const { selectedPublicBranch, selectedBranchDistanceKm } = useBranch();
   const navigate = useNavigate();
-  const location = useLocation();
-
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -52,12 +51,7 @@ export function LoginPage() {
   const [error, setError] = useState('');
 
   if (isAuthenticated) {
-    if (role === ROLES.PATIENT) {
-      return <Navigate to="/mobile-app" replace />;
-    }
-    const rawTarget = location.state?.from?.pathname;
-    const target = rawTarget && rawTarget !== '/' ? rawTarget : '/dashboard';
-    return <Navigate to={target} replace />;
+    return <Navigate to={getRoleHome(role)} replace />;
   }
 
   const validateFields = () => {
@@ -86,12 +80,10 @@ export function LoginPage() {
     try {
       const result = await signIn(email.trim(), password, selectedPublicBranch);
       if (result?.requireMobileApp || result?.role === ROLES.PATIENT) {
-        navigate('/mobile-app', { replace: true });
+        navigate(getRoleHome(ROLES.PATIENT), { replace: true });
         return;
       }
-      const rawTarget = location.state?.from?.pathname;
-      const target = rawTarget && rawTarget !== '/' ? rawTarget : '/dashboard';
-      navigate(target, { replace: true });
+      navigate(getRoleHome(result?.role), { replace: true });
     } catch (err) {
       setError(
         err?.message ||
@@ -259,11 +251,7 @@ export function LoginPage() {
                 className="mt-4 flex items-start gap-2.5 rounded-xl border border-amber-300 bg-amber-50 p-3.5 text-xs text-amber-900"
               >
                 <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
-                <span>
-                  Configure <code className="font-semibold">VITE_SUPABASE_URL</code> and{' '}
-                  <code className="font-semibold">VITE_SUPABASE_ANON_KEY</code> inside{' '}
-                  <code className="font-semibold">web/.env</code> to enable authentication.
-                </span>
+                <span>{supabaseConfigWarning}</span>
               </div>
             )}
 

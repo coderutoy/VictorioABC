@@ -7,7 +7,7 @@ VALUES
   (
     '11111111-1111-1111-1111-111111111101',
     'Victorio ABC — Baliwag, Bulacan',
-    'Benigno S. Aquino Avenue, Baliwag, Bulacan',
+    '347 Benigno S. Aquino Avenue, Baliwag, Bulacan',
     'Benigno S. Aquino Ave',
     'Baliwag, Bulacan',
     '09933269641',
@@ -27,7 +27,7 @@ VALUES
   (
     '11111111-1111-1111-1111-111111111103',
     'Victorio ABC — Mapulang Lupa, Pandi',
-    '98 Pandi Angat Rd, Pandi, Bulacan',
+    '98 Pandi Angat Rd, Mapulang Lupa, Pandi, Bulacan',
     'Mapulang Lupa',
     'Pandi, Bulacan',
     '09101909050',
@@ -47,7 +47,7 @@ VALUES
   (
     '11111111-1111-1111-1111-111111111105',
     'Victorio ABC — Meycauayan, Bulacan (Camalig)',
-    'Blk 64 Lot 9 El Camino Real Camalig, Meycauayan, Bulacan',
+    'Blk 63 Lot 9 El Camino Real, Camalig, Meycauayan, Bulacan',
     'Camalig',
     'Meycauayan, Bulacan',
     '09517734066',
@@ -67,7 +67,7 @@ VALUES
   (
     '11111111-1111-1111-1111-111111111107',
     'Victorio ABC — Cefels, Caloocan',
-    'Flojems Building Second Floor, Cefeles, Caloocan, 1427 Metro Manila',
+    'Flojems Building Second Floor, Cefels, Caloocan, 1427 Metro Manila',
     'Cefels',
     'Caloocan, Metro Manila',
     '09453311310',

@@ -18,11 +18,20 @@ export function formatPhoneDisplay(phone = '') {
 }
 
 /**
- * Single source of truth for the 7 official Victorio Animal Bite Center branches.
- * Leads with human-friendly street/landmark addresses (no raw Plus Codes in display text)
- * while preserving exact Google Maps coordinates/queries in mapsUrl.
+ * Builds an exact Google Maps search link from a branch's verified address / Plus Code query.
+ * Uses the address text (never approximate lat,lng) so Maps pins the real clinic location.
  */
-export const OFFICIAL_BRANCHES = [
+export function buildMapsUrl(mapsQuery = '') {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapsQuery)}`;
+}
+
+/**
+ * Single source of truth for the 7 official Victorio Animal Bite Center branches.
+ * - `address`   : clean text shown in the UI.
+ * - `mapsQuery` : exact verified query used for every Google Maps / Directions link.
+ * - `lat`/`lng` : used only for Haversine nearest-branch auto-detection (approximate map centroid).
+ */
+const BRANCH_DEFINITIONS = [
   {
     id: '11111111-1111-1111-1111-111111111101',
     slug: 'baliwag',
@@ -32,20 +41,16 @@ export const OFFICIAL_BRANCHES = [
     area: 'Baliwag',
     barangay: 'Benigno S. Aquino Ave',
     municipality: 'Baliwag, Bulacan',
-    address: 'Benigno S. Aquino Avenue, Baliwag, Bulacan',
+    address: '347 Benigno S. Aquino Avenue, Baliwag, Bulacan',
+    mapsQuery: '347 Benigno S. Aquino Avenue, Baliwag, Bulacan',
     contactNumber: '09933269641',
     contact_number: '09933269641',
     displayPhone: '0993 326 9641',
     facebookUrl:
       'https://www.facebook.com/profile.php?id=61582587141902&rdid=89OXyQxga66nD5lM&share_url=https%3A%2F%2Fwww.facebook.com%2Fshare%2F1M9ZCsfajc#',
-    mapsUrl:
-      'https://www.google.com/maps/search/?api=1&query=XV5X%2BMG7%2C+Benigno+S.+Aquino+Avenue%2C+Baliwag%2C+Bulacan',
-    lat: 14.9547,
-    lng: 120.8969,
-    hours: 'Open Daily • Walk-In & Follow-Up PEP Doses',
-    apiBaseUrl: DEFAULT_API_BASE_URL,
+    lat: 14.9556,
+    lng: 120.9009,
     serverTenantId: 'tenant-baliwag',
-    status: 'active',
   },
   {
     id: '11111111-1111-1111-1111-111111111102',
@@ -57,19 +62,16 @@ export const OFFICIAL_BRANCHES = [
     barangay: 'Santa Maria Bypass Rd',
     municipality: 'Santa Maria, Bulacan',
     address: 'Santa Maria Bypass Rd, Santa Maria, Bulacan',
+    mapsQuery: 'RXF3+GR7, Santa Maria Bypass Rd, Santa Maria, Bulacan',
     contactNumber: '09454378284',
     contact_number: '09454378284',
     displayPhone: '0945 437 8284',
     facebookUrl:
       'https://www.facebook.com/profile.php?id=61590283871799&locale=lv_LV#',
-    mapsUrl:
-      'https://www.google.com/maps/search/?api=1&query=RXF3%2BGR7%2C+Santa+Maria+Bypass+Rd%2C+Santa+Maria%2C+Bulacan',
-    lat: 14.8181,
-    lng: 120.9563,
-    hours: 'Open Daily • Walk-In & Follow-Up PEP Doses',
-    apiBaseUrl: DEFAULT_API_BASE_URL,
+    // Decoded from Plus Code RXF3+GR7 (Santa Maria, Bulacan)
+    lat: 14.8238,
+    lng: 120.9545,
     serverTenantId: 'tenant-santa-maria',
-    status: 'active',
   },
   {
     id: '11111111-1111-1111-1111-111111111103',
@@ -80,20 +82,16 @@ export const OFFICIAL_BRANCHES = [
     area: 'Pandi',
     barangay: 'Mapulang Lupa',
     municipality: 'Pandi, Bulacan',
-    address: '98 Pandi-Angat Rd, Brgy. Mapulang Lupa, Pandi, Bulacan',
+    address: '98 Pandi Angat Rd, Mapulang Lupa, Pandi, Bulacan',
+    mapsQuery: '98 Pandi Angat Rd, Pandi, Bulacan',
     contactNumber: '09101909050',
     contact_number: '09101909050',
     displayPhone: '0910 190 9050',
     facebookUrl:
       'https://www.facebook.com/profile.php?id=61590157694633&rdid=8awejxsn6SLd4vRy&share_url=https%3A%2F%2Fwww.facebook.com%2Fshare%2F1CkxMvjm6G#',
-    mapsUrl:
-      'https://www.google.com/maps/search/?api=1&query=98+Pandi+Angat+Rd%2C+Pandi%2C+Bulacan',
-    lat: 14.8658,
-    lng: 120.9571,
-    hours: 'Open Daily • Walk-In & Follow-Up PEP Doses',
-    apiBaseUrl: DEFAULT_API_BASE_URL,
+    lat: 14.8777,
+    lng: 120.9619,
     serverTenantId: 'tenant-pandi',
-    status: 'active',
   },
   {
     id: '11111111-1111-1111-1111-111111111104',
@@ -104,20 +102,16 @@ export const OFFICIAL_BRANCHES = [
     area: 'DRT',
     barangay: 'Pulong Sampalok',
     municipality: 'Doña Remedios Trinidad, Bulacan',
-    address: '201 M. Valte Road, Brgy. Pulong Sampalok, Doña Remedios Trinidad, Bulacan',
+    address: '201 M. Valte Road, Pulong Sampalok, Doña Remedios Trinidad, Bulacan',
+    mapsQuery: '201 M. Valte Road, Pulong Sampalok, Doña Remedios Trinidad, Bulacan',
     contactNumber: '09751861541',
     contact_number: '09751861541',
     displayPhone: '0975 186 1541',
     facebookUrl:
       'https://www.facebook.com/p/Victorio-Animal-Bite-Center-DRT-Bulacan-61580980903304/',
-    mapsUrl:
-      'https://www.google.com/maps/search/?api=1&query=201+M.+Valte+Road%2C+Pulong+Sampalok%2C+Dona+Remedios+Trinidad%2C+Bulacan',
     lat: 14.9964,
     lng: 121.0853,
-    hours: 'Open Daily • Walk-In & Follow-Up PEP Doses',
-    apiBaseUrl: DEFAULT_API_BASE_URL,
     serverTenantId: 'tenant-drt',
-    status: 'active',
   },
   {
     id: '11111111-1111-1111-1111-111111111105',
@@ -128,20 +122,16 @@ export const OFFICIAL_BRANCHES = [
     area: 'Meycauayan',
     barangay: 'Camalig',
     municipality: 'Meycauayan, Bulacan',
-    address: 'Blk 64 Lot 9 El Camino Real, Brgy. Camalig, Meycauayan, Bulacan',
+    address: 'Blk 63 Lot 9 El Camino Real, Camalig, Meycauayan, Bulacan',
+    mapsQuery: 'Blk 63 Lot 9 El Camino Real, Camalig, Meycauayan, Bulacan',
     contactNumber: '09517734066',
     contact_number: '09517734066',
     displayPhone: '0951 773 4066',
     facebookUrl:
       'https://www.facebook.com/p/Victorio-Animal-Bite-Center-Meycauayan-Bulacan-61587535684921/',
-    mapsUrl:
-      'https://www.google.com/maps/search/?api=1&query=Blk+64+Lot+9+El+Camino+Real+Camalig%2C+Meycauayan%2C+Bulacan',
-    lat: 14.7568,
-    lng: 120.9942,
-    hours: 'Open Daily • Walk-In & Follow-Up PEP Doses',
-    apiBaseUrl: DEFAULT_API_BASE_URL,
+    lat: 14.7664,
+    lng: 120.9994,
     serverTenantId: 'tenant-meycauayan-camalig',
-    status: 'active',
   },
   {
     id: '11111111-1111-1111-1111-111111111106',
@@ -152,20 +142,16 @@ export const OFFICIAL_BRANCHES = [
     area: 'Meycauayan',
     barangay: 'Calvario / Poblacion',
     municipality: 'Meycauayan, Bulacan',
-    address: '009 Pacheco Street, Brgy. Calvario / Poblacion, Meycauayan, 3020 Bulacan',
+    address: '009 Pacheco Street, Calvario, Meycauayan, 3020 Bulacan',
+    mapsQuery: '009 Pacheco Street, Calvario, Meycauayan, 3020 Bulacan',
     contactNumber: '09101909050',
     contact_number: '09101909050',
     displayPhone: '0910 190 9050',
     facebookUrl:
       'https://www.facebook.com/p/VICTORIO-Animal-Bite-Center-POBLACION-MEYCAUAYAN-61572101825058/',
-    mapsUrl:
-      'https://www.google.com/maps/search/?api=1&query=009+Pacheco+Street%2C+Calvario%2C+Meycauayan%2C+3020+Bulacan',
     lat: 14.7369,
     lng: 120.9606,
-    hours: 'Open Daily • Walk-In & Follow-Up PEP Doses',
-    apiBaseUrl: DEFAULT_API_BASE_URL,
     serverTenantId: 'tenant-meycauayan-poblacion',
-    status: 'active',
   },
   {
     id: '11111111-1111-1111-1111-111111111107',
@@ -176,22 +162,26 @@ export const OFFICIAL_BRANCHES = [
     area: 'Caloocan',
     barangay: 'Cefels',
     municipality: 'Caloocan, Metro Manila',
-    address: '2nd Floor, Flojems Building, Cefels Subd., Caloocan, 1427 Metro Manila',
+    address: 'Flojems Building Second Floor, Cefels, Caloocan, 1427 Metro Manila',
+    mapsQuery: 'Flojems Building Second Floor, Cefels, Caloocan, 1427 Metro Manila',
     contactNumber: '09453311310',
     contact_number: '09453311310',
     displayPhone: '0945 331 1310',
     facebookUrl:
       'https://www.facebook.com/p/Victorio-Animal-Bite-Center-Cefels-Caloocan-61591528577336/',
-    mapsUrl:
-      'https://www.google.com/maps/search/?api=1&query=Flojems+Building+Second+Floor%2C+Cefeles%2C+Caloocan%2C+1427+Metro+Manila',
     lat: 14.7566,
     lng: 121.0445,
-    hours: 'Open Daily • Walk-In & Follow-Up PEP Doses',
-    apiBaseUrl: DEFAULT_API_BASE_URL,
     serverTenantId: 'tenant-cefels-caloocan',
-    status: 'active',
   },
 ];
+
+export const OFFICIAL_BRANCHES = BRANCH_DEFINITIONS.map((branch) => ({
+  ...branch,
+  mapsUrl: buildMapsUrl(branch.mapsQuery),
+  hours: 'Open Daily • Walk-In & Follow-Up PEP Doses',
+  apiBaseUrl: DEFAULT_API_BASE_URL,
+  status: 'active',
+}));
 
 export const DEFAULT_BRANCH_SLUG = OFFICIAL_BRANCHES[0].slug;
 export const BRANCH_STORAGE_KEY = 'victorio_abc_active_branch_slug';
@@ -239,8 +229,7 @@ export function findNearestOfficialBranch(latitude, longitude) {
 
   for (const branch of OFFICIAL_BRANCHES) {
     const dist = calculateHaversineDistanceKm(latitude, longitude, branch.lat, branch.lng);
-    const rounded = Math.round(dist * 10) / 10;
-    distancesBySlug[branch.slug] = rounded;
+    distancesBySlug[branch.slug] = Math.round(dist * 10) / 10;
     if (dist < minDistance) {
       minDistance = dist;
       nearestBranch = branch;

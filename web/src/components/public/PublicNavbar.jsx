@@ -171,10 +171,10 @@ export function PublicNavbar() {
             </div>
           </Link>
 
-          <div className="hidden h-10 w-px bg-white/20 sm:block" />
+          <div className="hidden h-10 w-px bg-white/20 lg:block" />
 
-          {/* Multi-Tenant Branch / Server Switcher Dropdown with Inline "You are in:" Label */}
-          <div className="relative flex items-center gap-2.5" ref={branchDropdownRef}>
+          {/* Multi-Tenant Branch / Server Switcher Dropdown with Inline "You are in:" Label (desktop only; phones/tablets use the drawer) */}
+          <div className="relative hidden items-center gap-2.5 lg:flex" ref={branchDropdownRef}>
             <span className="hidden md:inline-block text-xs font-extrabold whitespace-nowrap text-[#7CD5C7]">
               You are in:
             </span>

@@ -1,8 +1,8 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { ROLES, STAFF_ROLES } from './context/AuthContext';
-import { AppShell } from './components/layout/AppShell';
+import { DashboardLayout } from './components/dashboard/DashboardLayout';
 import { PublicLayout } from './components/public/PublicLayout';
-import { RoleRoute } from './components/routing/RoleRoute';
+import { ProtectedRoute, DashboardRedirect } from './components/routing/ProtectedRoute';
 import { CookieConsentBanner } from './components/CookieConsentBanner';
 import { PublicLandingPage } from './pages/PublicLandingPage';
 import { AboutPage } from './pages/AboutPage';
@@ -17,7 +17,9 @@ import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
 import { LoginPage } from './pages/LoginPage';
 import { MobileAppRequiredPage } from './pages/MobileAppRequiredPage';
 import { UnauthorizedPage } from './pages/UnauthorizedPage';
-import { DashboardPage } from './pages/DashboardPage';
+import { AdminDashboardPage } from './pages/dashboards/AdminDashboardPage';
+import { NurseDashboardPage } from './pages/dashboards/NurseDashboardPage';
+import { DoctorDashboardPage } from './pages/dashboards/DoctorDashboardPage';
 import { PatientsPage } from './pages/PatientsPage';
 import { TriagePage } from './pages/TriagePage';
 import { ClinicalOrdersPage } from './pages/ClinicalOrdersPage';
@@ -31,7 +33,7 @@ export default function App() {
   return (
     <>
       <Routes>
-        {/* Public-Facing Mobile-Responsive Website with Shared Header, 3-Variant Pet Background & Footer */}
+        {/* Public-Facing Mobile-Responsive Website with Shared Header, Pet Background & Footer */}
         <Route element={<PublicLayout />}>
           <Route path="/" element={<PublicLandingPage />} />
           <Route path="/about" element={<AboutPage />} />
@@ -46,31 +48,46 @@ export default function App() {
         </Route>
 
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/mobile-app" element={<MobileAppRequiredPage />} />
+
+        {/* Patient app gate (no web dashboard for patients) + public sample QR target */}
+        <Route path="/mobile-app-only" element={<MobileAppRequiredPage />} />
+        <Route path="/app-download" element={<MobileAppRequiredPage />} />
+        <Route path="/download" element={<Navigate to="/app-download" replace />} />
+        <Route path="/mobile-app" element={<Navigate to="/mobile-app-only" replace />} />
         <Route path="/unauthorized" element={<UnauthorizedPage />} />
 
-        {/* Authenticated Clinical Portal */}
-        <Route element={<RoleRoute allowedRoles={STAFF_ROLES} />}>
-          <Route element={<AppShell />}>
-            <Route path="dashboard" element={<DashboardPage />} />
+        {/* Authenticated Clinical Dashboards (staff only) */}
+        <Route element={<ProtectedRoute allowedRoles={STAFF_ROLES} />}>
+          <Route element={<DashboardLayout />}>
+            <Route path="dashboard" element={<DashboardRedirect />} />
+
+            <Route element={<ProtectedRoute allowedRoles={[ROLES.ADMIN]} />}>
+              <Route path="dashboard/admin" element={<AdminDashboardPage />} />
+              <Route path="analytics" element={<AnalyticsPage />} />
+              <Route path="branches" element={<BranchesPage />} />
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRoles={[ROLES.NURSE]} />}>
+              <Route path="dashboard/nurse" element={<NurseDashboardPage />} />
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRoles={[ROLES.DOCTOR]} />}>
+              <Route path="dashboard/doctor" element={<DoctorDashboardPage />} />
+            </Route>
+
             <Route path="patients" element={<PatientsPage />} />
             <Route path="triage" element={<TriagePage />} />
             <Route path="clinical-orders" element={<ClinicalOrdersPage />} />
             <Route path="schedules" element={<SchedulesPage />} />
             <Route path="inventory" element={<InventoryPage />} />
             <Route path="audit" element={<AuditLogsPage />} />
-
-            <Route element={<RoleRoute allowedRoles={[ROLES.ADMIN]} />}>
-              <Route path="analytics" element={<AnalyticsPage />} />
-              <Route path="branches" element={<BranchesPage />} />
-            </Route>
           </Route>
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 
-      {/* Non-Intrusive RA 10173 Cookie Consent Bottom Banner */}
+      {/* Compact, dismissable RA 10173 cookie notice */}
       <CookieConsentBanner />
     </>
   );

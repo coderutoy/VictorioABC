@@ -16,6 +16,18 @@ export const ROLES = Object.freeze({
 
 export const STAFF_ROLES = [ROLES.NURSE, ROLES.DOCTOR, ROLES.ADMIN];
 
+export const ROLE_HOME_PATHS = Object.freeze({
+  [ROLES.ADMIN]: '/dashboard/admin',
+  [ROLES.NURSE]: '/dashboard/nurse',
+  [ROLES.DOCTOR]: '/dashboard/doctor',
+  [ROLES.PATIENT]: '/mobile-app-only',
+});
+
+/** Post-login landing route for each role (patients go to the mobile-app-only screen). */
+export function getRoleHome(role) {
+  return ROLE_HOME_PATHS[String(role || '').toLowerCase()] || '/login';
+}
+
 export const CROSS_BRANCH_DENIED_MESSAGE =
   'Access denied: Your account is assigned to a different branch and cannot sign in from this branch location.';
 
