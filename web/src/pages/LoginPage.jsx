@@ -12,11 +12,9 @@ import {
   Stethoscope,
   AlertCircle,
   Loader2,
-  HelpCircle,
 } from 'lucide-react';
 import {
   useAuth,
-  ROLES,
   getRoleHome,
   BRANCH_SWITCH_SIGNOUT_MESSAGE,
 } from '../context/AuthContext';
@@ -29,8 +27,8 @@ import { BufferLoader } from '../components/ui/BufferLoader';
 const TRUST_HIGHLIGHTS = [
   {
     icon: Stethoscope,
-    title: 'DOH / WHO-Aligned Clinical Workflow',
-    detail: 'Day 0–28 PEP schedules, Category I–III clinical orders, and cold-chain FEFO logs.',
+    title: 'DOH / WHO-Aligned Clinical Workspace',
+    detail: 'Branch-locked physician AI triage verification, weight-based ERIG/HRIG dosing, and 6-hour open-vial FEFO logs.',
   },
   {
     icon: Lock,
@@ -39,8 +37,8 @@ const TRUST_HIGHLIGHTS = [
   },
   {
     icon: Building2,
-    title: '7 Bulacan & Caloocan Connected Branches',
-    detail: 'Cross-branch Digital QR Pass continuity across Baliwag, Santa Maria, Pandi, DRT, Meycauayan & Caloocan.',
+    title: '7 Bulacan & Caloocan Official Clinics',
+    detail: 'Strict branch-locked clinical access across Baliwag, Santa Maria, Pandi, DRT, Meycauayan & Caloocan.',
   },
 ];
 
@@ -66,7 +64,6 @@ export function LoginPage() {
 
   const prevBranchSlugRef = useRef(selectedPublicBranch?.slug);
 
-  // Clear wrong-branch error when user switches to another branch (while keeping the branch-switch sign-out notice)
   useEffect(() => {
     if (
       prevBranchSlugRef.current &&
@@ -93,7 +90,7 @@ export function LoginPage() {
     const nextErrors = { email: '', password: '' };
     const trimmedEmail = email.trim();
     if (!trimmedEmail) {
-      nextErrors.email = 'Please enter your email address.';
+      nextErrors.email = 'Please enter your staff email address.';
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
       nextErrors.email = 'Please enter a valid email address (e.g., name@victorioabc.ph).';
     }
@@ -122,10 +119,6 @@ export function LoginPage() {
         );
         return;
       }
-      if (result.requireMobileApp || result.role === ROLES.PATIENT) {
-        navigate(getRoleHome(ROLES.PATIENT), { replace: true });
-        return;
-      }
       navigate(getRoleHome(result.role), { replace: true });
     } catch (err) {
       setError(
@@ -146,22 +139,23 @@ export function LoginPage() {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <Link
             to="/"
-            className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-white/85 px-3.5 py-1.5 text-xs font-extrabold text-[#464B71] shadow-xs transition hover:bg-white hover:text-[#118AB2] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#118AB2]"
+            data-testid="back-to-main-website-top"
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-white/90 px-4 py-2 text-xs font-extrabold text-[#464B71] shadow-xs transition hover:bg-white hover:text-[#118AB2] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#118AB2]"
           >
             <ArrowLeft className="h-4 w-4" />
-            <span>Back to Home</span>
+            <span>&larr; Back to Main Website</span>
           </Link>
 
           <Link
             to="/privacy-policy"
-            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl bg-white/85 px-3.5 py-1.5 text-xs font-bold text-[#464B71]/90 shadow-xs hover:bg-white hover:text-[#118AB2] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#118AB2]"
+            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl bg-white/90 px-3.5 py-2 text-xs font-bold text-[#464B71]/90 shadow-xs hover:bg-white hover:text-[#118AB2] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#118AB2]"
           >
             <ShieldCheck className="h-4 w-4 text-[#118AB2]" />
             <span>RA 10173 Healthcare Privacy Policy</span>
           </Link>
         </div>
 
-        {/* Mobile Compact Branded Header (< lg): Logo + Subtle Branch Plain Text Underneath */}
+        {/* Mobile Compact Branded Header (< lg) */}
         <div className="rounded-2xl bg-[#464B71] p-4 text-white shadow-md lg:hidden">
           <div className="flex items-center gap-3">
             <img
@@ -192,7 +186,6 @@ export function LoginPage() {
             />
 
             <div className="relative z-10 space-y-6">
-              {/* Victorio ABC Logo with ONLY the current branch name in clean, subtle plain text underneath */}
               <div className="space-y-1.5">
                 <div className="flex items-center gap-3.5">
                   <div className="h-16 w-16 shrink-0 rounded-full border-2 border-[#7CD5C7] bg-white p-0.5 shadow-md">
@@ -240,12 +233,32 @@ export function LoginPage() {
 
           {/* Right Authentication Card */}
           <div className="p-6 sm:p-8 lg:col-span-7 xl:p-10">
+            {/* Prominent Authorized Clinic Personnel Only Notice Banner */}
+            <div
+              data-testid="authorized-personnel-banner"
+              className="mb-5 rounded-2xl border-2 border-[#118AB2]/35 bg-[#118AB2]/10 p-4"
+            >
+              <div className="flex items-start gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#118AB2] text-white">
+                  <Lock className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-xs font-extrabold uppercase tracking-wider text-[#118AB2] sm:text-sm">
+                    Authorized Clinic Personnel Only
+                  </p>
+                  <p className="mt-0.5 text-xs leading-relaxed text-[#464B71]/85">
+                    This portal is strictly restricted to Victorio ABC doctors, nurses, and administrators. Patients should use the Victorio ABC mobile app or return to the public website.
+                  </p>
+                </div>
+              </div>
+            </div>
+
             <div className="space-y-1">
               <h1 className="text-2xl font-extrabold text-[#464B71] sm:text-3xl">
-                Sign In
+                Clinical Staff Portal Sign In
               </h1>
               <p className="text-xs text-[#464B71]/75 sm:text-sm">
-                Enter your account credentials to continue.
+                Active clinic branch lock: <strong className="text-[#118AB2]">{branchSubtext}</strong>
               </p>
             </div>
 
@@ -260,13 +273,12 @@ export function LoginPage() {
             )}
 
             <form onSubmit={handleSubmit} noValidate className="mt-5 space-y-4">
-              {/* Email Input */}
               <div className="space-y-1.5">
                 <label
                   htmlFor="email"
                   className="block text-sm font-extrabold text-[#464B71]"
                 >
-                  Email Address
+                  Staff Email Address
                 </label>
                 <div className="relative">
                   <Mail className="pointer-events-none absolute left-3.5 top-3.5 h-5 w-5 text-[#464B71]/60" />
@@ -299,7 +311,6 @@ export function LoginPage() {
                 )}
               </div>
 
-              {/* Password Input with Show / Hide Toggle */}
               <div className="space-y-1.5">
                 <label
                   htmlFor="password"
@@ -352,7 +363,6 @@ export function LoginPage() {
                 )}
               </div>
 
-              {/* Visible, Persistent High-Contrast Red Alert Banner Directly Above Sign In Button */}
               {visibleError && (
                 <div
                   role="alert"
@@ -365,7 +375,6 @@ export function LoginPage() {
                 </div>
               )}
 
-              {/* Submit Button */}
               <button
                 type="submit"
                 disabled={submitting || !isSupabaseConfigured}
@@ -379,33 +388,27 @@ export function LoginPage() {
                 ) : (
                   <>
                     <Lock className="h-5 w-5" />
-                    <span>Sign In</span>
+                    <span>Sign In to Clinical Workspace</span>
                   </>
                 )}
               </button>
             </form>
 
-            <div className="mt-6 space-y-2.5 border-t border-[#F2F2ED] pt-4 text-xs text-[#464B71]/80">
-              <div className="flex items-start gap-2">
-                <HelpCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#118AB2]" />
-                <span>
-                  Need assistance?{' '}
-                  <Link
-                    to="/contact"
-                    className="font-extrabold text-[#118AB2] underline hover:text-[#0D6E8E]"
-                  >
-                    View clinic contact directory
-                  </Link>
-                  .
-                </span>
-              </div>
-              <p className="text-[11px] text-[#464B71]/70">
-                By signing in, you acknowledge our{' '}
-                <Link to="/privacy-policy" className="font-bold text-[#118AB2] underline">
-                  RA 10173 Healthcare Privacy Policy
-                </Link>
-                .
-              </p>
+            {/* Bottom Return Link & Privacy Notice */}
+            <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-[#F2F2ED] pt-4 text-xs text-[#464B71]/80">
+              <Link
+                to="/"
+                data-testid="back-to-main-website-bottom"
+                className="inline-flex items-center gap-1.5 font-extrabold text-[#118AB2] hover:text-[#0D6E8E] hover:underline"
+              >
+                <span>&larr; Back to Main Website</span>
+              </Link>
+              <Link
+                to="/mobile-app"
+                className="font-bold text-[#464B71]/75 hover:text-[#118AB2] hover:underline"
+              >
+                Looking for the Patient Mobile App Guide?
+              </Link>
             </div>
           </div>
         </div>

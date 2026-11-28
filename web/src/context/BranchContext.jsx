@@ -59,7 +59,7 @@ export function BranchProvider({ children }) {
       const isBranchBoundStaff = role === ROLES.DOCTOR || role === ROLES.NURSE;
       if (isBranchBoundStaff && profile.branch_id && profile.branch_id !== nextBranchSlug) {
         await signOut(BRANCH_SWITCH_SIGNOUT_MESSAGE);
-        navigate('/login', { replace: true });
+        navigate('/staff-login', { replace: true });
       }
     },
     [isAuthenticated, profile, role, signOut, navigate]
@@ -98,7 +98,7 @@ export function BranchProvider({ children }) {
     const isBranchBoundStaff = role === ROLES.DOCTOR || role === ROLES.NURSE;
     if (isBranchBoundStaff && profile.branch_id && profile.branch_id !== selectedBranchSlug) {
       signOut(BRANCH_SWITCH_SIGNOUT_MESSAGE).then(() => {
-        navigate('/login', { replace: true });
+        navigate('/staff-login', { replace: true });
       });
     }
   }, [isAuthenticated, profile, role, selectedBranchSlug, signOut, navigate]);

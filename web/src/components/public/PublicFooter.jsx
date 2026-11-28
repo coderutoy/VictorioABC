@@ -4,10 +4,8 @@ import {
   MapPin,
   PhoneCall,
   ExternalLink,
-  ArrowRight,
   Smartphone,
 } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
 import { useBranch } from '../../context/BranchContext';
 import { useCookieConsent } from '../../context/CookieConsentContext';
 import { OFFICIAL_BRANCHES, formatPhoneDisplay } from '../../config/branches';
@@ -38,7 +36,6 @@ function FacebookIcon({ className = 'h-4 w-4' }) {
 }
 
 export function PublicFooter() {
-  const { isAuthenticated } = useAuth();
   const { selectedPublicBranch } = useBranch();
   const { openCookiePreferences } = useCookieConsent();
 
@@ -53,14 +50,12 @@ export function PublicFooter() {
     []
   );
 
-  const portalPath = isAuthenticated ? '/dashboard' : '/login';
-
   return (
-    <footer className="bg-[#464B71] text-white border-t border-white/15">
+    <footer className="border-t border-white/15 bg-[#464B71] text-white">
       <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
         <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-12">
-          {/* 1. Brand & Quick Navigation */}
-          <div className="lg:col-span-3 space-y-4">
+          {/* 1. Brand & Patient Navigation */}
+          <div className="space-y-4 lg:col-span-3">
             <Link to="/" className="flex items-center gap-3">
               <div className="h-14 w-14 shrink-0 rounded-full border-2 border-[#7CD5C7] bg-white p-0.5 shadow-md">
                 <img
@@ -85,17 +80,27 @@ export function PublicFooter() {
 
             <nav aria-label="Footer Quick Navigation" className="pt-1">
               <p className="text-xs font-extrabold uppercase tracking-wider text-[#7CD5C7]">
-                Quick Links
+                Patient Quick Links
               </p>
               <ul className="mt-2 grid grid-cols-2 gap-1.5 text-xs font-semibold text-white/90">
                 <li>
-                  <Link to="/about" className="hover:text-[#7CD5C7] hover:underline">
-                    About Victorio
+                  <Link to="/services" className="hover:text-[#7CD5C7] hover:underline">
+                    Our Services
                   </Link>
                 </li>
                 <li>
-                  <Link to="/services" className="hover:text-[#7CD5C7] hover:underline">
-                    Our Services
+                  <Link to="/mobile-app" className="hover:text-[#7CD5C7] hover:underline">
+                    Mobile App Guide
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/branches" className="hover:text-[#7CD5C7] hover:underline">
+                    Our Branches
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/partners" className="hover:text-[#7CD5C7] hover:underline">
+                    Partners
                   </Link>
                 </li>
                 <li>
@@ -114,18 +119,13 @@ export function PublicFooter() {
                   </Link>
                 </li>
                 <li>
-                  <Link to="/careers" className="hover:text-[#7CD5C7] hover:underline">
-                    Careers
+                  <Link to="/contact" className="hover:text-[#7CD5C7] hover:underline">
+                    Contact Us
                   </Link>
                 </li>
                 <li>
                   <Link to="/faq" className="hover:text-[#7CD5C7] hover:underline">
-                    FAQ
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/contact" className="hover:text-[#7CD5C7] hover:underline">
-                    Contact Us
+                    Patient FAQ
                   </Link>
                 </li>
                 <li>
@@ -133,36 +133,18 @@ export function PublicFooter() {
                     Privacy Policy
                   </Link>
                 </li>
-                <li>
-                  <button
-                    type="button"
-                    onClick={openCookiePreferences}
-                    className="text-left font-semibold text-white/90 hover:text-[#7CD5C7] hover:underline"
-                  >
-                    Cookie Preferences
-                  </button>
-                </li>
-                <li className="col-span-2 pt-1">
-                  <Link
-                    to={portalPath}
-                    className="inline-flex items-center gap-1.5 font-extrabold text-[#7CD5C7] hover:underline"
-                  >
-                    <span>Sign In</span>
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  </Link>
-                </li>
               </ul>
             </nav>
           </div>
 
           {/* 2. Active Branch Quick Contact */}
-          <div className="lg:col-span-3 space-y-3">
+          <div className="space-y-3 lg:col-span-3">
             <p className="text-xs font-extrabold uppercase tracking-wider text-[#7CD5C7]">
               Active Branch Quick Contact
             </p>
-            <div className="rounded-2xl border border-white/15 bg-[#343857] p-4 space-y-2.5 text-xs">
+            <div className="space-y-2.5 rounded-2xl border border-white/15 bg-[#343857] p-4 text-xs">
               <div className="flex items-center justify-between gap-2">
-                <span className="font-extrabold text-sm text-white">
+                <span className="text-sm font-extrabold text-white">
                   {selectedPublicBranch.shortName}
                 </span>
                 <span className="rounded-full bg-[#7CD5C7]/25 px-2 py-0.5 text-[10px] font-bold text-[#7CD5C7]">
@@ -186,7 +168,7 @@ export function PublicFooter() {
                 </a>
               </div>
 
-              <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-white/10">
+              <div className="flex flex-wrap items-center gap-3 border-t border-white/10 pt-2">
                 <a
                   href={selectedPublicBranch.mapsUrl}
                   target="_blank"
@@ -197,7 +179,7 @@ export function PublicFooter() {
                   <ExternalLink className="h-3 w-3" />
                 </a>
                 <Link
-                  to="/contact"
+                  to="/branches"
                   className="inline-flex items-center gap-1 font-bold text-[#7CD5C7] hover:underline"
                 >
                   <span>All 7 Branches &rarr;</span>
@@ -207,7 +189,7 @@ export function PublicFooter() {
           </div>
 
           {/* 3. Our Socials (Facebook Links for All 7 Official Branches) */}
-          <div className="lg:col-span-3 space-y-3">
+          <div className="space-y-3 lg:col-span-3">
             <p className="text-xs font-extrabold uppercase tracking-wider text-[#7CD5C7]">
               Our Socials (Official Facebook)
             </p>
@@ -231,15 +213,15 @@ export function PublicFooter() {
             </ul>
           </div>
 
-          {/* 4. Download App (QR Code Card) */}
-          <div className="lg:col-span-3 space-y-3">
+          {/* 4. Mobile App Companion */}
+          <div className="space-y-3 lg:col-span-3">
             <p className="text-xs font-extrabold uppercase tracking-wider text-[#7CD5C7]">
-              Download App
+              Mobile Companion App
             </p>
             <div className="rounded-xl border border-[#7CD5C7] bg-white p-3 text-center text-[#464B71] shadow-md">
               <div className="inline-flex items-center gap-1 rounded-full bg-[#7CD5C7]/35 px-2 py-0.5 text-[10px] font-extrabold text-[#464B71]">
                 <Smartphone className="h-3.5 w-3.5 text-[#118AB2]" />
-                <span>Download the Victorio ABC App</span>
+                <span>Victorio ABC Mobile App</span>
               </div>
 
               <div className="mx-auto mt-2 flex h-24 w-24 items-center justify-center rounded-lg border border-[#DDDCD4] bg-white p-1.5">
@@ -268,31 +250,44 @@ export function PublicFooter() {
               </div>
 
               <p className="mt-1.5 text-[11px] font-bold text-[#464B71]">
-                Scan — App Link Coming Soon
+                AI Pre-Triage &amp; Digital PEP Card
               </p>
-              <p className="mt-0.5 text-[10px] text-[#464B71]/70">
-                Digital QR Pass &amp; PEP Schedule Companion
-              </p>
+              <Link
+                to="/mobile-app"
+                className="mt-1 inline-block text-[11px] font-extrabold text-[#118AB2] hover:underline"
+              >
+                How the Mobile App Works &rarr;
+              </Link>
             </div>
           </div>
         </div>
 
-        <div className="mt-10 flex flex-col items-center justify-between gap-3 border-t border-white/15 pt-6 text-xs text-white/75 sm:flex-row">
+        {/* Bottom Legal & Copyright Bar with Discreet "Staff Portal" Link */}
+        <div className="mt-10 flex flex-col items-center justify-between gap-3 border-t border-white/15 pt-6 text-xs text-white/70 sm:flex-row">
           <span>
             &copy; {new Date().getFullYear()} Victorio Animal Bite Center. All rights reserved.
           </span>
           <div className="flex flex-wrap items-center gap-4">
-            <Link to="/privacy-policy" className="font-semibold text-[#7CD5C7] hover:underline">
+            <Link
+              to="/privacy-policy"
+              className="font-semibold text-white/75 transition hover:text-[#7CD5C7] hover:underline"
+            >
               Privacy Policy (RA 10173)
             </Link>
             <button
               type="button"
               onClick={openCookiePreferences}
-              className="font-semibold text-[#7CD5C7] hover:underline"
+              className="font-semibold text-white/75 transition hover:text-[#7CD5C7] hover:underline"
             >
               Cookie Preferences
             </button>
-            <span>7 Official Branches &bull; WHO Rabies PEP</span>
+            <Link
+              to="/staff-login"
+              data-testid="footer-staff-portal-link"
+              className="font-medium text-white/60 transition hover:text-white/90 hover:underline"
+            >
+              Staff Portal
+            </Link>
           </div>
         </div>
       </div>

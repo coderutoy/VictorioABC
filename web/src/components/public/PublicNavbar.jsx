@@ -9,14 +9,27 @@ import {
   CalendarClock,
   ShieldCheck,
   Stethoscope,
-  BookOpen,
   LocateFixed,
-  Lock,
 } from 'lucide-react';
 import { useBranch } from '../../context/BranchContext';
 import { formatBranchLabel, formatPhoneDisplay } from '../../config/branches';
 
+const PRIMARY_NAV_LINKS = [
+  { to: '/', label: 'Home', end: true },
+  { to: '/services', label: 'Services' },
+  { to: '/mobile-app', label: 'Mobile App Guide' },
+  { to: '/branches', label: 'Our Branches' },
+  { to: '/partners', label: 'Partners' },
+  { to: '/contact', label: 'Contact' },
+];
+
 const CLINICAL_GUIDE_ITEMS = [
+  {
+    to: '/triage-guide',
+    title: 'Triage Guide',
+    subtitle: 'WHO Category I–III exposure breakdown & first-aid steps',
+    icon: ShieldCheck,
+  },
   {
     to: '/roadmap',
     title: 'Vaccination Roadmap',
@@ -24,27 +37,21 @@ const CLINICAL_GUIDE_ITEMS = [
     icon: CalendarClock,
   },
   {
-    to: '/triage-guide',
-    title: 'Triage Guide',
-    subtitle: 'WHO Category I–III exposure breakdown & first-aid guide',
-    icon: ShieldCheck,
-  },
-  {
     to: '/protocols',
     title: 'Clinical Protocols',
     subtitle: 'DOH/WHO PEP, ERIG/HRIG & wound care standards',
     icon: Stethoscope,
   },
-  {
-    to: '/services',
-    title: 'Clinic Services Overview',
-    subtitle: 'Walk-in PEP, PrEP, ERIG infiltration & PhilHealth ABTP',
-    icon: BookOpen,
-  },
 ];
 
 const GUIDE_PATHS = ['/roadmap', '/triage-guide', '/protocols'];
 
+/**
+ * Strictly Patient-Focused Top Navigation Header (Phase 2.3.2):
+ * - Noticeably larger, crisper Victorio ABC logo + minimalist "You are in:" branch selector.
+ * - Real React Router <NavLink> multi-page links (/, /services, /mobile-app, /branches, /partners, /contact).
+ * - Zero Staff Portal Login button in desktop or mobile header (moved discreetly to the footer legal bar).
+ */
 export function PublicNavbar() {
   const { pathname } = useLocation();
   const {
@@ -98,13 +105,17 @@ export function PublicNavbar() {
     setBranchDropdownOpen(false);
   };
 
-  const anchorLinkClass =
-    'inline-flex min-h-[48px] items-center rounded-xl px-3.5 py-2 text-sm font-bold text-white/90 whitespace-nowrap transition hover:bg-white/10 hover:text-[#7CD5C7] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#118AB2]';
+  const navLinkClass = ({ isActive }) =>
+    `inline-flex min-h-[48px] items-center rounded-xl px-3.5 py-2 text-sm font-bold whitespace-nowrap transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#118AB2] ${
+      isActive
+        ? 'bg-white/15 text-[#7CD5C7] shadow-2xs'
+        : 'text-white/90 hover:bg-white/10 hover:text-[#7CD5C7]'
+    }`;
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-white/15 bg-[#464B71] text-white shadow-md">
       <div className="flex min-h-[90px] w-full items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:min-h-[104px] lg:px-10 xl:px-14">
-        {/* Left Group: Noticeably Larger, Crisper Logo + Minimal Public "You are in:" Branch Selector */}
+        {/* Left Group: Larger Victorio ABC Logo + Minimal Public "You are in:" Branch Selector */}
         <div className="relative flex shrink-0 flex-col items-start" ref={branchDropdownRef}>
           <div className="flex items-center gap-3 sm:gap-3.5">
             <Link
@@ -203,26 +214,16 @@ export function PublicNavbar() {
           )}
         </div>
 
-        {/* Right Group: Quick Anchor Links, Clinical Guides Dropdown & Discreet Staff Portal Login Button */}
+        {/* Right Group: Strictly Patient-Focused Multi-Page NavLinks + Emergency Hotline Pill */}
         <nav
           aria-label="Primary Public Navigation"
-          className="hidden items-center gap-1 xl:gap-2 lg:flex"
+          className="hidden items-center gap-1 xl:gap-1.5 lg:flex"
         >
-          <a href="/#services" className={anchorLinkClass}>
-            Services
-          </a>
-
-          <a href="/#mobile-app-guide" className={anchorLinkClass}>
-            Mobile App Guide
-          </a>
-
-          <a href="/#our-branches" className={anchorLinkClass}>
-            Our Branches
-          </a>
-
-          <a href="/#partners" className={anchorLinkClass}>
-            Partners
-          </a>
+          {PRIMARY_NAV_LINKS.map(({ to, label, end }) => (
+            <NavLink key={to} to={to} end={end} className={navLinkClass}>
+              {label}
+            </NavLink>
+          ))}
 
           {/* Clinical Guides Dropdown */}
           <div
@@ -291,14 +292,13 @@ export function PublicNavbar() {
             )}
           </div>
 
-          <Link
-            to="/login"
-            data-testid="navbar-staff-login-btn"
-            className="ml-1 inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-[#7CD5C7]/50 bg-white/10 px-4 py-2 text-xs font-extrabold text-[#7CD5C7] whitespace-nowrap transition hover:bg-[#7CD5C7] hover:text-[#464B71] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#118AB2]"
+          <a
+            href={`tel:${selectedPublicBranch.contactNumber}`}
+            className="ml-1 hidden min-h-[44px] items-center gap-1.5 rounded-xl bg-[#7CD5C7] px-3.5 py-2 text-xs font-extrabold text-[#464B71] whitespace-nowrap shadow-xs transition hover:bg-[#68c7b8] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white xl:inline-flex"
           >
-            <Lock className="h-3.5 w-3.5" />
-            <span>Staff Portal Login</span>
-          </Link>
+            <PhoneCall className="h-3.5 w-3.5 shrink-0 text-[#118AB2]" />
+            <span>{formattedActivePhone}</span>
+          </a>
         </nav>
 
         {/* Mobile Menu Trigger */}
@@ -313,24 +313,26 @@ export function PublicNavbar() {
         </button>
       </div>
 
-      {/* Mobile Navigation Drawer */}
+      {/* Mobile Navigation Drawer (Strictly Patient-Focused — No Staff Login Button) */}
       {mobileMenuOpen && (
         <div className="border-t border-white/15 bg-[#343857] px-4 pb-5 pt-3 lg:hidden">
           <nav className="flex flex-col space-y-1">
-            {[
-              { href: '/#services', label: 'Services' },
-              { href: '/#mobile-app-guide', label: 'Mobile App Guide' },
-              { href: '/#our-branches', label: 'Our Branches' },
-              { href: '/#partners', label: 'Partners' },
-            ].map((item) => (
-              <a
-                key={item.href}
-                href={item.href}
+            {PRIMARY_NAV_LINKS.map(({ to, label, end }) => (
+              <NavLink
+                key={to}
+                to={to}
+                end={end}
                 onClick={() => setMobileMenuOpen(false)}
-                className="flex min-h-[48px] items-center rounded-xl px-3.5 py-2 text-sm font-bold text-white/90 hover:bg-white/10 hover:text-[#7CD5C7]"
+                className={({ isActive }) =>
+                  `flex min-h-[48px] items-center rounded-xl px-3.5 py-2 text-sm font-bold ${
+                    isActive
+                      ? 'bg-[#118AB2] text-white'
+                      : 'text-white/90 hover:bg-white/10 hover:text-[#7CD5C7]'
+                  }`
+                }
               >
-                {item.label}
-              </a>
+                {label}
+              </NavLink>
             ))}
 
             {/* Mobile Expandable Clinical Guides Accordion */}
@@ -371,30 +373,6 @@ export function PublicNavbar() {
                 </div>
               )}
             </div>
-
-            {[
-              { to: '/about', label: 'About' },
-              { to: '/faq', label: 'FAQ' },
-              { to: '/contact', label: 'Contact' },
-            ].map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                onClick={() => setMobileMenuOpen(false)}
-                className="flex min-h-[48px] items-center rounded-xl px-3.5 py-2 text-sm font-bold text-white/90 hover:bg-white/10"
-              >
-                {item.label}
-              </NavLink>
-            ))}
-
-            <Link
-              to="/login"
-              onClick={() => setMobileMenuOpen(false)}
-              className="mt-2 flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-[#118AB2] px-4 py-2.5 text-sm font-extrabold text-white"
-            >
-              <Lock className="h-4 w-4" />
-              <span>Staff Portal Login</span>
-            </Link>
           </nav>
 
           <div className="mt-3">

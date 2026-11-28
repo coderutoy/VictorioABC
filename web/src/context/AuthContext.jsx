@@ -20,15 +20,14 @@ export const ROLE_HOME_PATHS = Object.freeze({
   [ROLES.ADMIN]: '/dashboard/admin',
   [ROLES.NURSE]: '/dashboard/nurse',
   [ROLES.DOCTOR]: '/dashboard/doctor',
-  [ROLES.PATIENT]: '/mobile-app-only',
 });
 
 export const THEME_STORAGE_KEY = 'victorio_abc_dashboard_theme';
 export const NOTIF_PREFS_STORAGE_KEY = 'victorio_abc_notification_prefs';
 
-/** Post-login landing route for each role (patients go to /mobile-app-only). */
+/** Post-login landing route for authorized staff roles. */
 export function getRoleHome(role) {
-  return ROLE_HOME_PATHS[String(role || '').toLowerCase()] || '/login';
+  return ROLE_HOME_PATHS[String(role || '').toLowerCase()] || '/staff-login';
 }
 
 export const CROSS_BRANCH_DENIED_MESSAGE =
@@ -36,6 +35,9 @@ export const CROSS_BRANCH_DENIED_MESSAGE =
 
 export const BRANCH_SWITCH_SIGNOUT_MESSAGE =
   'Signed out because you switched to a different branch.';
+
+export const PATIENT_PORTAL_DENIED_MESSAGE =
+  'Access denied. This portal is for authorized Victorio ABC clinic personnel only. Patients should use the Victorio ABC mobile app.';
 
 function normalizeBranchSlug(val) {
   if (!val) return null;
@@ -80,7 +82,6 @@ export function AuthProvider({ children }) {
     return DEFAULT_NOTIF_PREFS;
   });
 
-  // Prevents onAuthStateChange from prematurely authenticating or wiping authError during atomic signIn validation
   const validatingRef = useRef(false);
 
   const runBuffer = useCallback(async (message, minMs = 550) => {
@@ -177,7 +178,6 @@ export function AuthProvider({ children }) {
         window.localStorage.setItem(NOTIF_PREFS_STORAGE_KEY, JSON.stringify(merged));
       }
     }
-    // Lock storage branch to assigned branch for doctor/nurse
     if (
       (loadedProfile.role === ROLES.DOCTOR || loadedProfile.role === ROLES.NURSE) &&
       loadedProfile.branch_id &&
@@ -209,7 +209,7 @@ export function AuthProvider({ children }) {
           if (
             !loadedProfile ||
             loadedProfile.is_active === false ||
-            loadedProfile.role === ROLES.PATIENT
+            !STAFF_ROLES.includes(loadedProfile.role)
           ) {
             await supabase.auth.signOut();
             if (isMounted) {
@@ -248,7 +248,7 @@ export function AuthProvider({ children }) {
       }
 
       const loadedProfile = await queryUserProfile(nextSession.user);
-      if (!loadedProfile || loadedProfile.role === ROLES.PATIENT) {
+      if (!loadedProfile || !STAFF_ROLES.includes(loadedProfile.role)) {
         return;
       }
 
@@ -264,13 +264,16 @@ export function AuthProvider({ children }) {
   }, [queryUserProfile, syncProfilePreferencesToState]);
 
   /**
-   * Atomic sign-in with passive database `branch_id` validation and smooth clinical BufferLoader.
+   * Staff-Only Atomic Sign-In:
+   * - Rejects any account that is not `admin`, `doctor`, or `nurse`, immediately calling
+   *   `supabase.auth.signOut()` and surfacing `PATIENT_PORTAL_DENIED_MESSAGE`.
+   * - Enforces assigned branch lock for `doctor` and `nurse` accounts.
    */
   const signIn = useCallback(
     async (email, password, activeBranchArg) => {
       validatingRef.current = true;
       setAuthError(null);
-      setBufferMessage('Verifying credentials & branch lock...');
+      setBufferMessage('Verifying clinic staff credentials...');
 
       try {
         const startMs = Date.now();
@@ -285,7 +288,6 @@ export function AuthProvider({ children }) {
               );
         const activeBranchId = activeBranchObj.slug || activeBranchObj.id;
 
-        // 1. Authenticate credentials via Supabase Auth
         const { data, error } = await supabase.auth.signInWithPassword({
           email: String(email || '').trim(),
           password,
@@ -297,7 +299,6 @@ export function AuthProvider({ children }) {
           return { ok: false, error: msg };
         }
 
-        // 2. Query public.profiles for user.id
         const loadedProfile = await queryUserProfile(data.user);
         if (!loadedProfile || loadedProfile.is_active === false) {
           await supabase.auth.signOut();
@@ -310,7 +311,19 @@ export function AuthProvider({ children }) {
 
         const resolvedRole = String(loadedProfile.role || 'patient').toLowerCase();
 
-        // 3. Strict branch check for doctor and nurse before setting authenticated state
+        // Reject patient or non-staff accounts immediately on /staff-login
+        if (!STAFF_ROLES.includes(resolvedRole)) {
+          await supabase.auth.signOut();
+          setSession(null);
+          setProfile(null);
+          setAuthError(PATIENT_PORTAL_DENIED_MESSAGE);
+          return {
+            ok: false,
+            error: PATIENT_PORTAL_DENIED_MESSAGE,
+          };
+        }
+
+        // Strict branch check for doctor and nurse before setting authenticated state
         if (
           (resolvedRole === ROLES.DOCTOR || resolvedRole === ROLES.NURSE) &&
           loadedProfile.branch_id !== activeBranchId
@@ -325,26 +338,11 @@ export function AuthProvider({ children }) {
           };
         }
 
-        // Ensure ~550ms realistic clinical buffer display
         const elapsed = Date.now() - startMs;
         if (elapsed < 550) {
           await new Promise((r) => setTimeout(r, 550 - elapsed));
         }
 
-        // 4. Patient role: sign out web session and route to /mobile-app-only
-        if (resolvedRole === ROLES.PATIENT) {
-          await supabase.auth.signOut();
-          setSession(null);
-          setProfile(null);
-          return {
-            ok: true,
-            role: ROLES.PATIENT,
-            profile: loadedProfile,
-            requireMobileApp: true,
-          };
-        }
-
-        // 5. Validation passed for admin, doctor, or nurse
         syncProfilePreferencesToState(loadedProfile);
         setSession(data.session);
         setProfile(loadedProfile);
@@ -354,7 +352,6 @@ export function AuthProvider({ children }) {
           profile: loadedProfile,
           session: data.session,
           user: data.user,
-          requireMobileApp: false,
         };
       } finally {
         setBufferMessage(null);
@@ -432,7 +429,9 @@ export function AuthProvider({ children }) {
   }, []);
 
   const role = profile?.role ? String(profile.role).toLowerCase() : null;
-  const isAuthenticated = Boolean(session?.user && profile && role !== ROLES.PATIENT);
+  const isAuthenticated = Boolean(
+    session?.user && profile && STAFF_ROLES.includes(role)
+  );
 
   return (
     <AuthContext.Provider
