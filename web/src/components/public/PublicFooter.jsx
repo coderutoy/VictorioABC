@@ -119,13 +119,13 @@ export function PublicFooter() {
                   </Link>
                 </li>
                 <li>
-                  <Link to="/contact" className="hover:text-[#7CD5C7] hover:underline">
-                    Contact Us
+                  <Link to="/faq" className="hover:text-[#7CD5C7] hover:underline">
+                    FAQ
                   </Link>
                 </li>
                 <li>
-                  <Link to="/faq" className="hover:text-[#7CD5C7] hover:underline">
-                    Patient FAQ
+                  <Link to="/about" className="hover:text-[#7CD5C7] hover:underline">
+                    About Us
                   </Link>
                 </li>
                 <li>

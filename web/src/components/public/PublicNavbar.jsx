@@ -20,7 +20,7 @@ const PRIMARY_NAV_LINKS = [
   { to: '/mobile-app', label: 'Mobile App Guide' },
   { to: '/branches', label: 'Our Branches' },
   { to: '/partners', label: 'Partners' },
-  { to: '/contact', label: 'Contact' },
+  { to: '/faq', label: 'FAQ' },
 ];
 
 const CLINICAL_GUIDE_ITEMS = [

@@ -16,7 +16,6 @@ import { TriageGuidePage } from './pages/TriageGuidePage';
 import { ProtocolsPage } from './pages/ProtocolsPage';
 import { CareersPage } from './pages/CareersPage';
 import { FaqPage } from './pages/FaqPage';
-import { ContactPage } from './pages/ContactPage';
 import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
 import { LoginPage } from './pages/LoginPage';
 import { UnauthorizedPage } from './pages/UnauthorizedPage';
@@ -51,13 +50,13 @@ export default function App() {
           <Route path="/mobile-app" element={<MobileAppGuidePage />} />
           <Route path="/branches" element={<BranchesPage />} />
           <Route path="/partners" element={<PartnersPage />} />
+          <Route path="/faq" element={<FaqPage />} />
+          <Route path="/contact" element={<Navigate to="/branches" replace />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/roadmap" element={<RoadmapPage />} />
           <Route path="/triage-guide" element={<TriageGuidePage />} />
           <Route path="/protocols" element={<ProtocolsPage />} />
           <Route path="/careers" element={<CareersPage />} />
-          <Route path="/faq" element={<FaqPage />} />
-          <Route path="/contact" element={<ContactPage />} />
           <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
         </Route>
 

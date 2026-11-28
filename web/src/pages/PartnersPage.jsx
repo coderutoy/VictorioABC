@@ -51,11 +51,11 @@ export function PartnersPage() {
           </div>
 
           <Link
-            to="/contact"
+            to="/branches"
             className="inline-flex min-h-[48px] items-center gap-2 rounded-xl bg-[#7CD5C7] px-5 py-3 text-xs font-extrabold text-[#464B71] shadow-md transition hover:bg-[#68c7b8]"
           >
             <PhoneCall className="h-4 w-4 text-[#118AB2]" />
-            <span>Inquire About Clinic Partnerships</span>
+            <span>View Branch Contacts &amp; Hotlines</span>
           </Link>
         </div>
       </div>
@@ -121,10 +121,10 @@ export function PartnersPage() {
           </p>
         </div>
         <Link
-          to="/contact"
+          to="/branches"
           className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-[#118AB2] px-5 py-2.5 text-xs font-extrabold text-white hover:bg-[#0D6E8E]"
         >
-          <span>Contact Administration</span>
+          <span>View Branch Directory &amp; Contacts</span>
           <ArrowRight className="h-4 w-4" />
         </Link>
       </div>
